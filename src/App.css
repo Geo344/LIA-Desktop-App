@@ -1,0 +1,251 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+body, html, #root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent;
+}
+
+.desktop-canvas {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  padding: 20px; /* Distance from the edges of the screen */
+  
+  /* New Flex Layout */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Anchors everything to the left */
+  gap: 40px; /* Space between the clock and the shortcut grid */
+}
+
+/* Shortcuts */
+.shortcuts-grid {
+  display: grid;
+  grid-template-rows: repeat(6, 60px);
+  grid-template-columns: repeat(2, 60px);
+  grid-auto-flow: column;
+  gap: 16px 16px;
+  width: fit-content;
+  position: relative;
+  margin-top: 180px; /* Push down the grid to prevent date overlap */
+}
+
+.custom-shortcut {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-shortcut:hover {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  transform: translateY(-2px) scale(1.06);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.custom-shortcut:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+
+.custom-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+.custom-app-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+
+/* Date Widget */
+.date-widget {
+  position: absolute;
+  top: 100px;
+  left: 32px;
+  display: grid;
+  grid-template-areas:
+    "weekday day"
+    "month   day";
+  column-gap: 6px; 
+  row-gap: -2px; 
+  align-items: center; 
+  opacity: 0.9;
+  letter-spacing: 1px;
+  font-family: "Avenir Next", Avenir, "Century Gothic", Helvetica, Arial, sans-serif;
+  color: #efdae5;
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.date-weekday {
+  grid-area: weekday;
+  font-size: 42px;
+  font-weight: 500;
+  justify-self: end; /* Forces the weekday to align to the right side of its column */
+  align-self: end; /* Pushes text to bottom of its row */
+  line-height: 1;
+}
+
+.date-month {
+  grid-area: month;
+  font-size: 20px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.8);
+  justify-self: end; /* Forces the month to align to the right side of its column */
+  align-self: start; /* Pushes text to top of its row */
+  line-height: 1;
+}
+
+.date-day {
+  grid-area: day;
+  font-size: 72px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+/* Time Widget */
+.time-widget {
+  position: absolute;
+  top: 24px;
+  left: 32px;
+  display: flex;
+  align-items: baseline;
+  color: #efdae5;
+  opacity: 0.9;
+  font-family: "Avenir Next", Avenir, "Century Gothic", Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 16px rgba(151, 105, 105, 0.8);
+  pointer-events: none;
+}
+
+.time-digits {
+  font-size: 72px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.time-ampm {
+  font-size: 32px;
+  font-weight: 300;
+  margin-left: 2px; /* Space between time and AM/PM */
+  letter-spacing: 1px;
+}
+
+
+/* --- Music Player Widget --- */
+.music-widget {
+  position: absolute;
+  bottom: 40px; /* Distance from the bottom of the screen */
+  left: 50%;
+  transform: translateX(-50%); /* Centers the widget perfectly */
+  
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  width: 320px;
+  
+  /* Glassmorphic styling matching your shortcuts */
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(56, 225, 209, 0.25);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  
+  color: #f4f8fc;
+  font-family: "Avenir Next", Avenir, sans-serif;
+  z-index: 100;
+}
+
+.music-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.music-title {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.music-artist {
+  font-size: 12px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.music-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.music-controls button {
+  background: none;
+  border: none;
+  color: #f4f8fc;
+  font-size: 18px;
+  cursor: pointer;
+  transition: transform 0.2s ease, text-shadow 0.2s ease;
+}
+
+.music-controls button:hover {
+  transform: scale(1.1);
+  text-shadow: 0 0 8px rgba(56, 225, 209, 0.6);
+}
+
+.play-pause-btn {
+  font-size: 24px !important;
+}
+
+/* Progress Line */
+.progress-bar-container {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: #38E1D1; /* Teal matching your glowing scheme */
+  border-radius: 2px;
+  transition: width 1s linear; /* Smooth visual progression between polls */
+}
