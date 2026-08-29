@@ -163,8 +163,8 @@ body, html, #root {
 /* --- Music Player Widget --- */
 .music-widget {
   position: absolute;
-  top: 24px; /* Matches the top margin spacing */
-  right: -1px; /* Pulls the widget perfectly flush against the right edge */
+  top: 0; 
+  right: 0; 
   
   display: grid;
   grid-template-areas:
@@ -174,29 +174,68 @@ body, html, #root {
   row-gap: 4px;
   align-items: center;
   
-  padding: 16px 24px 16px 16px;
+  /* Tightly hugs the album cover on the top, bottom, and left */
+  padding: 8px 24px 8px 8px;
   min-width: 280px;
   max-width: 360px;
   
   background: rgba(15, 23, 42, 0.45);
+  
+  /* Only render borders on the floating edges */
   border: 1px solid rgba(56, 225, 209, 0.25);
-  border-right: none; /* Removes the border on the screen edge to create the pop-out illusion */
+  border-top: none;
+  border-right: none;
   backdrop-filter: blur(12px);
   
-  /* Rounds the left side, leaving the right side flat against the screen */
-  border-radius: 24px 0 0 24px; 
-  /* Casts the shadow to the left and bottom to enhance depth */
+  /* Sharp corners at the screen edges to anchor the inverse curves, normal curve on the floating bottom-left corner */
+  border-radius: 0 0 0 24px; 
   box-shadow: -8px 8px 32px rgba(0, 0, 0, 0.4);
   
-  color: #f4f8fc;
+  color: #efdae5;
   font-family: "Avenir Next", Avenir, sans-serif;
   z-index: 100;
 }
 
+/* 1. Top-Left Inverted Curve (Sweeps from the top screen border down into the widget) */
+.music-widget::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -24px;
+  width: 24px;
+  height: 24px;
+  
+  /* Draws the glass background and the 1px cyan border along the curve */
+  background: radial-gradient(circle at 0% 100%, transparent 23px, rgba(56, 225, 209, 0.4) 23px, rgba(56, 225, 209, 0.4) 24px, rgba(15, 23, 42, 0.45) 24px);
+  backdrop-filter: blur(12px);
+  
+  /* Masks out the transparent corner so it doesn't blur the desktop behind it */
+  -webkit-mask-image: radial-gradient(circle at 0% 100%, transparent 23px, black 23.5px);
+  mask-image: radial-gradient(circle at 0% 100%, transparent 23px, black 23.5px);
+  pointer-events: none;
+}
+
+/* 2. Bottom-Right Inverted Curve (Sweeps from the widget bottom border down into the right screen edge) */
+.music-widget::after {
+  content: "";
+  position: absolute;
+  bottom: -24px;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  
+  /* Uses the exact same gradient math, just anchored to the bottom right */
+  background: radial-gradient(circle at 0% 100%, transparent 23px, rgba(56, 225, 209, 0.4) 23px, rgba(56, 225, 209, 0.4) 24px, rgba(15, 23, 42, 0.45) 24px);
+  backdrop-filter: blur(12px);
+  -webkit-mask-image: radial-gradient(circle at 0% 100%, transparent 23px, black 23.5px);
+  mask-image: radial-gradient(circle at 0% 100%, transparent 23px, black 23.5px);
+  pointer-events: none;
+}
+
 .album-cover {
   grid-area: cover;
-  width: 80px;
-  height: 80px;
+  width: 84px;
+  height: 84px;
   border-radius: 8px;
   object-fit: cover;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
