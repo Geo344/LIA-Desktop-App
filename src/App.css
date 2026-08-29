@@ -233,19 +233,11 @@ body, html, #root {
   font-size: 24px !important;
 }
 
-/* Progress Line */
-.progress-bar-container {
-  width: 100%;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-top: 4px;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: #38E1D1; /* Teal matching your glowing scheme */
-  border-radius: 2px;
-  transition: width 1s linear; /* Smooth visual progression between polls */
+.album-cover {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }

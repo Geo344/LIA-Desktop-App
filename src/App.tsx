@@ -33,7 +33,7 @@ interface MediaState {
   title: string;
   artist: string;
   is_playing: boolean;
-  progress_percent: number;
+  thumbnail_base64?: string;
 }
 
 const playSound = () => {
@@ -64,7 +64,7 @@ function MusicWidget() {
   const [media, setMedia] = useState<MediaState | null>(null);
 
   useEffect(() => {
-    // Polling interval every 500ms for snappy UI responses
+    // Restored to 1000ms since we no longer need fast CSS interpolation
     const interval = setInterval(async () => {
       try {
         const state = await invoke<MediaState>("get_media_state");
@@ -72,7 +72,7 @@ function MusicWidget() {
       } catch (e) {
         console.error(e);
       }
-    }, 500);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -80,6 +80,15 @@ function MusicWidget() {
 
   return (
     <div className="music-widget">
+      {/* Conditionally render the album cover if Rust sends the Base64 string */}
+      {media.thumbnail_base64 && (
+        <img 
+          src={`data:image/jpeg;base64,${media.thumbnail_base64}`} 
+          alt="Album Art" 
+          className="album-cover" 
+        />
+      )}
+      
       <div className="music-info">
         <span className="music-title">{media.title}</span>
         <span className="music-artist">{media.artist}</span>
@@ -91,17 +100,6 @@ function MusicWidget() {
           {media.is_playing ? "⏸" : "▶"}
         </button>
         <button onClick={() => invoke("media_next")}>⏭</button>
-      </div>
-
-      <div className="progress-bar-container">
-        <div 
-          className="progress-bar-fill" 
-          style={{ 
-            width: `${media.progress_percent}%`,
-            // Tell CSS to smoothly slide to the new width over 500ms
-            transition: media.is_playing ? "width 0.5s linear" : "none"
-          }}
-        />
       </div>
     </div>
   );

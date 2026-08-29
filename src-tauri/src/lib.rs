@@ -13,6 +13,9 @@ use std::net::TcpListener;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 
+// Base64 encoding for album art
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+
 // Native Windows Media Controls
 #[cfg(target_os = "windows")]
 use windows::Media::Control::{
@@ -20,8 +23,8 @@ use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionPlaybackStatus,
 };
 
-// Keyboard Controls
-
+#[cfg(target_os = "windows")]
+use windows::Storage::Streams::DataReader;
 
 // Embed the sound effect directly into the compiled Rust binary
 static SOUND_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/ConfirmSound.wav");
@@ -154,7 +157,7 @@ pub struct MediaState {
     pub title: String,
     pub artist: String,
     pub is_playing: bool,
-    pub progress_percent: f64,
+    pub thumbnail_base64: Option<String>, // <--- Replaced progress_percent with thumbnail string
 }
 
 // Google Token storage and authentication functions
@@ -352,7 +355,6 @@ async fn launch_hidden_ytm() -> Result<(), String> {
         playlist_id
     );
 
-    // FIX 1: Make reqwest look like a real browser to bypass Google Bot/Consent blocks
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
         .build()
@@ -390,7 +392,6 @@ async fn launch_hidden_ytm() -> Result<(), String> {
     let joined_ids = video_ids.join(",");
     let watch_url = format!("https://www.youtube.com/watch_videos?video_ids={}", joined_ids);
 
-    // Send consent bypass cookie so the TLGG playlist generates successfully
     let res = client.get(&watch_url)
         .header("Cookie", "CONSENT=YES+;")
         .send()
@@ -403,14 +404,13 @@ async fn launch_hidden_ytm() -> Result<(), String> {
         ytm_url = format!("{}&autoplay=1", ytm_url);
     }
 
-    // Escape the ampersands so cmd.exe doesn't chop the URL into separate commands
     let escaped_url = ytm_url.replace("&", "^&");
 
     Command::new("cmd")
         .args([
             "/C",
             "start",
-            "", // Empty title string prevents 'start' from misinterpreting quoted arguments
+            "",
             "chrome",
             "--profile-directory=Default",
             &format!("--app={}", escaped_url),
@@ -421,11 +421,8 @@ async fn launch_hidden_ytm() -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    // Fire the specialized targeting script 3 seconds after launch
     std::thread::spawn(|| {
-        // Wait for the YouTube Music DOM to fully render
         std::thread::sleep(std::time::Duration::from_millis(3000));
-        
         #[cfg(target_os = "windows")]
         trigger_play_and_hide();
     });
@@ -438,50 +435,69 @@ async fn launch_hidden_ytm() -> Result<(), String> {
 async fn get_media_state() -> Result<MediaState, String> {
     #[cfg(target_os = "windows")]
     {
-        // Use .get() instead of .await to extract the operation result
+        // Define a fast fallback state
+        let empty_state = MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, thumbnail_base64: None };
+
         let manager = match GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()) {
             Ok(m) => m,
-            Err(_) => return Ok(MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, progress_percent: 0.0 }),
+            Err(_) => return Ok(empty_state.clone()),
         };
 
         let session = match manager.GetCurrentSession() {
             Ok(s) => s,
-            Err(_) => return Ok(MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, progress_percent: 0.0 }),
+            Err(_) => return Ok(empty_state.clone()),
         };
 
         let props = match session.TryGetMediaPropertiesAsync().and_then(|op| op.get()) {
             Ok(p) => p,
-            Err(_) => return Ok(MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, progress_percent: 0.0 }),
+            Err(_) => return Ok(empty_state.clone()),
         };
 
         let title = props.Title().map(|s| s.to_string()).unwrap_or_default();
         let artist = props.Artist().map(|s| s.to_string()).unwrap_or_default();
-
-        let mut progress_percent = 0.0;
-        if let Ok(timeline) = session.GetTimelineProperties() {
-            let pos = timeline.Position().map(|ts| ts.Duration).unwrap_or(0);
-            let end = timeline.EndTime().map(|ts| ts.Duration).unwrap_or(0);
-            if end > 0 {
-                progress_percent = (pos as f64 / end as f64) * 100.0;
-            }
-        }
 
         let is_playing = session.GetPlaybackInfo()
             .and_then(|info| info.PlaybackStatus())
             .map(|status| status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
             .unwrap_or(false);
 
+        // --- NEW: EXTRACT RAW THUMBNAIL IMAGE BYTES ---
+        let mut thumbnail_base64 = None;
+        if let Ok(thumbnail_ref) = props.Thumbnail() {
+            if let Ok(stream_op) = thumbnail_ref.OpenReadAsync() {
+                if let Ok(stream) = stream_op.get() {
+                    if let Ok(size) = stream.Size() {
+                        if size > 0 {
+                            // Hook into the Windows DataReader API
+                            if let Ok(reader) = DataReader::CreateDataReader(&stream) {
+                                // Load the exact image size into memory
+                                if let Ok(load_op) = reader.LoadAsync(size as u32) {
+                                    if let Ok(_) = load_op.get() {
+                                        // Read the bytes and securely encode them as Base64 for React
+                                        let mut buffer = vec![0u8; size as usize];
+                                        if let Ok(_) = reader.ReadBytes(&mut buffer) {
+                                            thumbnail_base64 = Some(STANDARD.encode(&buffer));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return Ok(MediaState {
             is_active: true,
             title,
             artist,
             is_playing,
-            progress_percent,
+            thumbnail_base64,
         });
     }
 
     #[cfg(not(target_os = "windows"))]
-    Ok(MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, progress_percent: 0.0 })
+    Ok(MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, thumbnail_base64: None })
 }
 
 // Media Control Commands
@@ -489,10 +505,10 @@ async fn get_media_state() -> Result<MediaState, String> {
 async fn media_play_pause() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
-        if let Ok(manager) = op.get() { // Use .get()
+        if let Ok(manager) = op.get() { 
             if let Ok(session) = manager.GetCurrentSession() {
                 if let Ok(op2) = session.TryTogglePlayPauseAsync() {
-                    let _ = op2.get(); // Use .get()
+                    let _ = op2.get(); 
                 }
             }
         }
@@ -504,10 +520,10 @@ async fn media_play_pause() -> Result<(), String> {
 async fn media_next() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
-        if let Ok(manager) = op.get() { // Use .get()
+        if let Ok(manager) = op.get() { 
             if let Ok(session) = manager.GetCurrentSession() {
                 if let Ok(op2) = session.TrySkipNextAsync() {
-                    let _ = op2.get(); // Use .get()
+                    let _ = op2.get(); 
                 }
             }
         }
@@ -519,10 +535,10 @@ async fn media_next() -> Result<(), String> {
 async fn media_prev() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
-        if let Ok(manager) = op.get() { // Use .get()
+        if let Ok(manager) = op.get() { 
             if let Ok(session) = manager.GetCurrentSession() {
                 if let Ok(op2) = session.TrySkipPreviousAsync() {
-                    let _ = op2.get(); // Use .get()
+                    let _ = op2.get(); 
                 }
             }
         }

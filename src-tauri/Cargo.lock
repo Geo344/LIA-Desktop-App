@@ -6,6 +6,7 @@ version = 4
 name = "LIA"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "dotenvy",
  "rand",
  "reqwest 0.12.28",
