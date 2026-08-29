@@ -36,10 +36,6 @@ interface MediaState {
   thumbnail_base64?: string;
 }
 
-const playSound = () => {
-  invoke("play_ping").catch(console.error);
-};
-
 // Mapping of customized shortcut icons to desktop shortcuts
 const SHORTCUT_CONFIG: ShortcutConfig[] = [
   // Column 1
@@ -95,11 +91,27 @@ function MusicWidget() {
       </div>
 
       <div className="music-controls">
-        <button onClick={() => invoke("media_prev")}>⏮</button>
-        <button onClick={() => invoke("media_play_pause")} className="play-pause-btn">
+        <button 
+          onPointerDown={() => invoke("play_ping", { soundType: "music" }).catch(console.error)} 
+          onClick={() => invoke('media_prev')}
+        >
+          ⏮
+        </button>
+
+        <button 
+          className="play-pause-btn" 
+          onPointerDown={() => invoke("play_ping", { soundType: "music" }).catch(console.error)} 
+          onClick={() => invoke('media_play_pause')}
+        >
           {media.is_playing ? "⏸" : "▶"}
         </button>
-        <button onClick={() => invoke("media_next")}>⏭</button>
+        
+        <button 
+          onPointerDown={() => invoke("play_ping", { soundType: "music" }).catch(console.error)} 
+          onClick={() => invoke('media_next')}
+        >
+          ⏭
+        </button>
       </div>
     </div>
   );
@@ -195,7 +207,7 @@ export default function App() {
             <button
               key={config.matchName}
               className="custom-shortcut"
-              onPointerDown={playSound}
+              onPointerDown={() => invoke("play_ping", { soundType: "shortcut" }).catch(console.error)}
               onClick={() => handleClick(config.matchName, item?.path || "")}
               title={config.matchName}
             >

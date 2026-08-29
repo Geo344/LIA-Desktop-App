@@ -2,8 +2,9 @@ use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::io::Cursor;
 use tauri::State;
 
-// Embed the sound effect directly into the compiled Rust binary
-static SOUND_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/ConfirmSound.wav");
+// Embed both sound effects directly into the compiled Rust binary
+static SHORTCUT_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/ConfirmSound.wav");
+static MUSIC_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/MusicButton.wav");
 
 // Thread-safe state holding only the stream handle
 pub struct AppAudioState {
@@ -19,10 +20,15 @@ impl AppAudioState {
     }
 }
 
-// Play ping sound effect for shortcuts
+// Play sound effect based on the requested type
 #[tauri::command]
-pub fn play_ping(audio: State<'_, AppAudioState>) {
-    let cursor = Cursor::new(SOUND_BYTES);
+pub fn play_ping(audio: State<'_, AppAudioState>, sound_type: &str) {
+    let bytes = match sound_type {
+        "music" => MUSIC_BYTES,
+        _ => SHORTCUT_BYTES, // Default to the shortcut click
+    };
+
+    let cursor = Cursor::new(bytes);
     if let Ok(source) = Decoder::new(cursor) {
         let _ = audio.stream_handle.play_raw(source.convert_samples());
     }
