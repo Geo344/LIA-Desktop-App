@@ -163,34 +163,51 @@ body, html, #root {
 /* --- Music Player Widget --- */
 .music-widget {
   position: absolute;
-  bottom: 40px; /* Distance from the bottom of the screen */
-  left: 50%;
-  transform: translateX(-50%); /* Centers the widget perfectly */
+  top: 24px; /* Matches the top margin spacing */
+  right: -1px; /* Pulls the widget perfectly flush against the right edge */
   
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-areas:
+    "cover info"
+    "cover controls";
+  column-gap: 16px;
+  row-gap: 4px;
   align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
-  width: 320px;
   
-  /* Glassmorphic styling matching your shortcuts */
+  padding: 16px 24px 16px 16px;
+  min-width: 280px;
+  max-width: 360px;
+  
   background: rgba(15, 23, 42, 0.45);
   border: 1px solid rgba(56, 225, 209, 0.25);
+  border-right: none; /* Removes the border on the screen edge to create the pop-out illusion */
   backdrop-filter: blur(12px);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  
+  /* Rounds the left side, leaving the right side flat against the screen */
+  border-radius: 24px 0 0 24px; 
+  /* Casts the shadow to the left and bottom to enhance depth */
+  box-shadow: -8px 8px 32px rgba(0, 0, 0, 0.4);
   
   color: #f4f8fc;
   font-family: "Avenir Next", Avenir, sans-serif;
   z-index: 100;
 }
 
+.album-cover {
+  grid-area: cover;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 .music-info {
+  grid-area: info;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
+  align-items: flex-start; /* Left aligns the text block */
+  text-align: left;
   width: 100%;
 }
 
@@ -201,6 +218,7 @@ body, html, #root {
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
+  max-width: 220px; /* Prevents long song titles from blowing out the screen */
 }
 
 .music-artist {
@@ -210,8 +228,10 @@ body, html, #root {
 }
 
 .music-controls {
+  grid-area: controls;
   display: flex;
   align-items: center;
+  justify-content: flex-start; /* Left aligns the buttons with the text */
   gap: 20px;
 }
 
@@ -231,13 +251,4 @@ body, html, #root {
 
 .play-pause-btn {
   font-size: 24px !important;
-}
-
-.album-cover {
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  object-fit: cover;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
