@@ -33,6 +33,8 @@ struct TokenResponse {
 #[derive(serde::Deserialize)]
 struct PlaylistItemListResponse {
     items: Vec<PlaylistItem>,
+    #[serde(rename = "nextPageToken")]
+    next_page_token: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -241,10 +243,6 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
     let access_token = get_access_token(&client_id, &client_secret).await?;
 
     let playlist_id = "PL9aMbwJZsrPvwepEucfl_qjbJ7hepcXO1";
-    let api_url = format!(
-        "https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId={}",
-        playlist_id
-    );
 
     // Provide a standard User-Agent so Google doesn't reject the API request
     let client = reqwest::Client::builder()
@@ -252,37 +250,59 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let playlist_data: PlaylistItemListResponse = client
-        .get(&api_url)
-        .bearer_auth(access_token)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut all_video_ids: Vec<String> = Vec::new();
+    let mut page_token = None::<String>;
 
-    let mut video_ids: Vec<String> = playlist_data
-        .items
-        .into_iter()
-        .filter_map(|item| item.content_details.map(|cd| cd.video_id))
-        .collect();
+    // 1. Loop through every page of the API to capture the entire playlist
+    loop {
+        let mut api_url = format!(
+            "https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50&playlistId={}",
+            playlist_id
+        );
 
-    if video_ids.is_empty() {
+        if let Some(token) = &page_token {
+            api_url = format!("{}&pageToken={}", api_url, token);
+        }
+
+        let playlist_data: PlaylistItemListResponse = client
+            .get(&api_url)
+            .bearer_auth(&access_token)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        for item in playlist_data.items {
+            if let Some(cd) = item.content_details {
+                all_video_ids.push(cd.video_id);
+            }
+        }
+
+        page_token = playlist_data.next_page_token;
+        if page_token.is_none() {
+            break; // No more pages left
+        }
+    }
+
+    if all_video_ids.is_empty() {
         return Err("No video items found in playlist.".into());
     }
 
+    // 2. Globally shuffle the full library, then truncate to 50 tracks to prevent URL crashes
     // Randomize the order of the playlist natively in Rust before sending to YouTube
     {
         let mut rng = rand::thread_rng();
-        video_ids.shuffle(&mut rng);
+        all_video_ids.shuffle(&mut rng);
     }
+    all_video_ids.truncate(50);
 
     #[cfg(target_os = "windows")]
     close_previous_ytm_session();
     std::thread::sleep(std::time::Duration::from_millis(50));
 
-    let joined_ids = video_ids.join(",");
+    let joined_ids = all_video_ids.join(",");
     let watch_url = format!("https://www.youtube.com/watch_videos?video_ids={}", joined_ids);
 
     // A fast GET request to let YouTube convert our raw list of IDs into a unified session URL
