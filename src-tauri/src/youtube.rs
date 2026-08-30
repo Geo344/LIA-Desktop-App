@@ -46,27 +46,43 @@ struct ContentDetails {
 }
 
 #[cfg(target_os = "windows")]
-unsafe extern "system" fn close_ytm_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
+unsafe extern "system" fn close_ytm_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let mut text: [u16; 512] = [0; 512];
     let len = GetWindowTextW(hwnd, &mut text);
     let title = String::from_utf16_lossy(&text[..len as usize]);
 
     if title.contains("YouTube Music") && !title.contains("Google Chrome") {
         let _ = SendMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
+        
+        // Signal back that we found and closed a window
+        let found_ptr = lparam.0 as *mut bool;
+        if !found_ptr.is_null() {
+            *found_ptr = true;
+        }
     }
     
-    BOOL(1) 
+    BOOL(1) // Keep enumerating to ensure ALL instances are closed
 }
 
 #[cfg(target_os = "windows")]
 fn close_previous_ytm_session() {
     unsafe {
-        let _ = EnumWindows(Some(close_ytm_windows_proc), LPARAM(0));
+        // Poll for up to 1 second (10 attempts * 100ms) to ensure it completely closes
+        for _ in 0..10 {
+            let mut found = false;
+            let _ = EnumWindows(Some(close_ytm_windows_proc), LPARAM(&mut found as *mut _ as isize));
+            
+            // If no windows were found during this sweep, it is completely closed
+            if !found {
+                break; 
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
 }
 
 #[cfg(target_os = "windows")]
-unsafe extern "system" fn play_and_hide_ytm_proc(hwnd: HWND, _: LPARAM) -> BOOL {
+unsafe extern "system" fn play_and_hide_ytm_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let mut text: [u16; 512] = [0; 512];
     let len = GetWindowTextW(hwnd, &mut text);
     let title = String::from_utf16_lossy(&text[..len as usize]);
@@ -84,16 +100,24 @@ unsafe extern "system" fn play_and_hide_ytm_proc(hwnd: HWND, _: LPARAM) -> BOOL 
         std::thread::sleep(std::time::Duration::from_millis(150));
         let _ = ShowWindow(hwnd, SW_HIDE);
 
-        return BOOL(0);
+        // Signal back that the exact window was hooked and hidden
+        let found_ptr = lparam.0 as *mut bool;
+        if !found_ptr.is_null() {
+            *found_ptr = true;
+        }
+
+        return BOOL(0); // Stop enumerating
     }
     BOOL(1)
 }
 
 #[cfg(target_os = "windows")]
-fn trigger_play_and_hide() {
+fn trigger_play_and_hide() -> bool {
+    let mut found = false;
     unsafe {
-        let _ = EnumWindows(Some(play_and_hide_ytm_proc), LPARAM(0));
+        let _ = EnumWindows(Some(play_and_hide_ytm_proc), LPARAM(&mut found as *mut _ as isize));
     }
+    found // Returns true if the callback successfully hid the window
 }
 
 fn get_token_storage_path() -> PathBuf {
@@ -256,9 +280,9 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
         video_ids.shuffle(&mut rng);
     }
 
+    // 1. Blocks and polls until old sessions are truly closed
     #[cfg(target_os = "windows")]
     close_previous_ytm_session();
-    std::thread::sleep(std::time::Duration::from_millis(50));
 
     let joined_ids = video_ids.join(",");
     let watch_url = format!("https://www.youtube.com/watch_videos?video_ids={}", joined_ids);
@@ -292,10 +316,18 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
 
+    // 2. Poll constantly until the window spawns, then exit immediately
     std::thread::spawn(|| {
-        std::thread::sleep(std::time::Duration::from_millis(3000));
         #[cfg(target_os = "windows")]
-        trigger_play_and_hide();
+        {
+            // Max 10 seconds of polling (50 attempts * 200ms)
+            for _ in 0..50 {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                if trigger_play_and_hide() {
+                    break; // Successfully found, played, and hidden
+                }
+            }
+        }
     });
 
     Ok(())
