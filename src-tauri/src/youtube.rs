@@ -17,6 +17,8 @@ use windows::{
 const REDIRECT_PORT: u16 = 8989;
 const GOOGLE_SCOPES: &str = "https://www.googleapis.com/auth/youtube.readonly%20https://www.googleapis.com/auth/calendar.readonly";
 
+// --- DATA STRUCTURES ---
+
 #[derive(serde::Deserialize, serde::Serialize, Default)]
 struct TokenStorage {
     refresh_token: Option<String>,
@@ -45,44 +47,33 @@ struct ContentDetails {
     video_id: String,
 }
 
+// --- WINDOW MANAGEMENT HOOKS ---
+
+// 1. Hook to aggressively close any existing YTM windows before we start a new one
 #[cfg(target_os = "windows")]
-unsafe extern "system" fn close_ytm_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+unsafe extern "system" fn close_ytm_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut text: [u16; 512] = [0; 512];
     let len = GetWindowTextW(hwnd, &mut text);
     let title = String::from_utf16_lossy(&text[..len as usize]);
 
+    // Ensure we only kill the standalone PWA, not the user's active Chrome browsing session
     if title.contains("YouTube Music") && !title.contains("Google Chrome") {
         let _ = SendMessageW(hwnd, WM_CLOSE, WPARAM(0), LPARAM(0));
-        
-        // Signal back that we found and closed a window
-        let found_ptr = lparam.0 as *mut bool;
-        if !found_ptr.is_null() {
-            *found_ptr = true;
-        }
     }
     
-    BOOL(1) // Keep enumerating to ensure ALL instances are closed
+    BOOL(1) // Keep enumerating just in case there are multiple ghost windows
 }
 
 #[cfg(target_os = "windows")]
 fn close_previous_ytm_session() {
     unsafe {
-        // Poll for up to 1 second (10 attempts * 100ms) to ensure it completely closes
-        for _ in 0..10 {
-            let mut found = false;
-            let _ = EnumWindows(Some(close_ytm_windows_proc), LPARAM(&mut found as *mut _ as isize));
-            
-            // If no windows were found during this sweep, it is completely closed
-            if !found {
-                break; 
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
+        let _ = EnumWindows(Some(close_ytm_windows_proc), LPARAM(0));
     }
 }
 
+// 2. Hook to find the newly spawned window, simulate a spacebar press, and hide it
 #[cfg(target_os = "windows")]
-unsafe extern "system" fn play_and_hide_ytm_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+unsafe extern "system" fn play_and_hide_ytm_proc(hwnd: HWND, _: LPARAM) -> BOOL {
     let mut text: [u16; 512] = [0; 512];
     let len = GetWindowTextW(hwnd, &mut text);
     let title = String::from_utf16_lossy(&text[..len as usize]);
@@ -91,34 +82,35 @@ unsafe extern "system" fn play_and_hide_ytm_proc(hwnd: HWND, lparam: LPARAM) -> 
         use windows::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_KEYUP};
         const VK_SPACE: u8 = 0x20;
 
+        // Force the OS to give this specific window keyboard focus
         let _ = SetForegroundWindow(hwnd);
+        
+        // A microscopic buffer to let the OS window manager catch up before we press a key
         std::thread::sleep(std::time::Duration::from_millis(50));
 
+        // Simulate a physical Spacebar press to bypass YouTube's anti-autoplay protections
         keybd_event(VK_SPACE, 0, windows::Win32::UI::Input::KeyboardAndMouse::KEYBD_EVENT_FLAGS(0), 0);
         keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0);
 
+        // Give the Chromium web engine 150ms to register the keystroke
         std::thread::sleep(std::time::Duration::from_millis(150));
+
+        // Strip the window from the display and taskbar entirely
         let _ = ShowWindow(hwnd, SW_HIDE);
 
-        // Signal back that the exact window was hooked and hidden
-        let found_ptr = lparam.0 as *mut bool;
-        if !found_ptr.is_null() {
-            *found_ptr = true;
-        }
-
-        return BOOL(0); // Stop enumerating
+        return BOOL(0); // Successfully executed, stop enumerating
     }
     BOOL(1)
 }
 
 #[cfg(target_os = "windows")]
-fn trigger_play_and_hide() -> bool {
-    let mut found = false;
+fn trigger_play_and_hide() {
     unsafe {
-        let _ = EnumWindows(Some(play_and_hide_ytm_proc), LPARAM(&mut found as *mut _ as isize));
+        let _ = EnumWindows(Some(play_and_hide_ytm_proc), LPARAM(0));
     }
-    found // Returns true if the callback successfully hid the window
 }
+
+// --- GOOGLE OAUTH & TOKEN MANAGEMENT ---
 
 fn get_token_storage_path() -> PathBuf {
     if let Ok(appdata) = std::env::var("APPDATA") {
@@ -151,6 +143,8 @@ fn save_refresh_token(token: &str) {
     }
 }
 
+// Silently fetches a new access token using the saved refresh token, 
+// or spawns a browser for manual login if it's the user's first time
 async fn get_access_token(client_id: &str, client_secret: &str) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -233,6 +227,8 @@ async fn get_access_token(client_id: &str, client_secret: &str) -> Result<String
     Ok(token_res.access_token)
 }
 
+// --- MAIN LAUNCH COMMAND ---
+
 #[tauri::command]
 pub async fn launch_hidden_ytm() -> Result<(), String> {
     dotenv().ok();
@@ -250,6 +246,7 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
         playlist_id
     );
 
+    // Provide a standard User-Agent so Google doesn't reject the API request
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
         .build()
@@ -275,18 +272,20 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
         return Err("No video items found in playlist.".into());
     }
 
+    // Randomize the order of the playlist natively in Rust before sending to YouTube
     {
         let mut rng = rand::thread_rng();
         video_ids.shuffle(&mut rng);
     }
 
-    // 1. Blocks and polls until old sessions are truly closed
     #[cfg(target_os = "windows")]
     close_previous_ytm_session();
+    std::thread::sleep(std::time::Duration::from_millis(50));
 
     let joined_ids = video_ids.join(",");
     let watch_url = format!("https://www.youtube.com/watch_videos?video_ids={}", joined_ids);
 
+    // A fast GET request to let YouTube convert our raw list of IDs into a unified session URL
     let res = client.get(&watch_url)
         .header("Cookie", "CONSENT=YES+;")
         .send()
@@ -299,8 +298,10 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
         ytm_url = format!("{}&autoplay=1", ytm_url);
     }
 
+    // Windows CMD requires ampersands to be escaped with a caret
     let escaped_url = ytm_url.replace("&", "^&");
 
+    // Spawn the Chrome PWA out of sight
     Command::new("cmd")
         .args([
             "/C",
@@ -310,24 +311,21 @@ pub async fn launch_hidden_ytm() -> Result<(), String> {
             "--profile-directory=Default",
             &format!("--app={}", escaped_url),
             "--autoplay-policy=no-user-gesture-required",
-            "--window-position=-9999,-9999",
+            "--window-position=-9999,-9999", // Pin it way off-screen initially
             "--window-size=1,1",
         ])
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    // 2. Poll constantly until the window spawns, then exit immediately
+    // --- THE ORIGINAL SLEEP MECHANIC ---
+    // Park a native Rust background thread for exactly 3 seconds. 
+    // This gives the Chrome app plenty of time to spawn, download the DOM, and prepare the player.
     std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(3000));
+        
+        // Once awake, fire the spacebar into the loaded window and hide it instantly.
         #[cfg(target_os = "windows")]
-        {
-            // Max 10 seconds of polling (50 attempts * 200ms)
-            for _ in 0..50 {
-                std::thread::sleep(std::time::Duration::from_millis(200));
-                if trigger_play_and_hide() {
-                    break; // Successfully found, played, and hidden
-                }
-            }
-        }
+        trigger_play_and_hide();
     });
 
     Ok(())
