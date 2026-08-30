@@ -170,25 +170,28 @@ body, html, #root {
   grid-template-areas:
     "cover info"
     "cover controls";
+  
+  /* Explicitly lock the first column to the exact size of your cover */
+  grid-template-columns: 84px 1fr; 
+  
   column-gap: 16px;
   row-gap: 4px;
   align-items: center;
-  
+
   /* Tightly hugs the album cover on the top, bottom, and left */
   padding: 8px 24px 8px 8px;
-  min-width: 280px;
-  max-width: 360px;
   
-  background: rgba(15, 23, 42, 1);
+  /* Lock the total width so the left edge never shifts when track names change */
+  width: 340px; 
   
   /* Border and backdrop for the music widget */
+  background: rgba(15, 23, 42, 1);
   border: 1px solid rgb(30, 113, 104);
   border-top: none;
   border-right: none;
   backdrop-filter: blur(12px);
   
   border-radius: 0 0 0 16px; 
-  
   filter: drop-shadow(-4px 4px 12px rgba(0, 0, 0, 0.4));
   
   color: #efdae5;

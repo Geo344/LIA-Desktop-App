@@ -2,14 +2,12 @@ mod audio;
 mod shortcuts;
 mod media;
 mod wallpaper;
-mod youtube;
 
 use tauri::Manager;
 use audio::{play_ping, AppAudioState};
 use shortcuts::{get_desktop_items, launch_item};
 use media::{get_media_state, media_play_pause, media_next, media_prev};
 use wallpaper::attach_to_workerw;
-use youtube::launch_hidden_ytm;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,7 +27,6 @@ pub fn run() {
             get_desktop_items,
             launch_item,
             play_ping,
-            launch_hidden_ytm,
             get_media_state,
             media_play_pause,
             media_next,

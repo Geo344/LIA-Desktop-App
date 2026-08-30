@@ -158,12 +158,6 @@ export default function App() {
       name.toLowerCase() === "recycle bin" || name.toLowerCase() === "trash"
         ? "shell:RecycleBinFolder"
         : path;
-
-    // Intercept Music Player shortcut to launch YouTube Music in a hidden browser window
-    if (name === "YouTube Music") {
-      invoke("launch_hidden_ytm").catch(console.error);
-      return; // Stop execution here so it doesn't try to launch a desktop path
-    }
     
     if (targetPath) {
       invoke("launch_item", { path: targetPath }).catch(console.error);
