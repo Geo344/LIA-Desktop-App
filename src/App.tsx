@@ -38,15 +38,12 @@ interface MediaState {
 
 // Mapping of customized shortcut icons to desktop shortcuts
 const SHORTCUT_CONFIG: ShortcutConfig[] = [
-  // Column 1
   { matchName: "Recycle Bin", icon: TrashIcon },
   { matchName: "2026 Fall Semester", icon: FolderIcon },
   { matchName: "calibre", icon: BooksIcon },
   { matchName: "Google Finance", icon: FinanceIcon },
   { matchName: "Zoom Workplace", icon: ZoomIcon },
   { matchName: "Discord", icon: DiscordIcon },
-  
-  // Column 2
   { matchName: "Minecraft Launcher", icon: MinecraftIcon },
   { matchName: "Roblox Player", icon: RobloxIcon },
   { matchName: "Steam", icon: SteamIcon },

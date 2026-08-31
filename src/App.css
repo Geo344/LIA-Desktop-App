@@ -27,16 +27,29 @@ body, html, #root {
   gap: 40px; /* Space between the clock and the shortcut grid */
 }
 
-/* Shortcuts */
+/* Shortcuts Dock */
 .shortcuts-grid {
-  display: grid;
-  grid-template-rows: repeat(6, 60px);
-  grid-template-columns: repeat(2, 60px);
-  grid-auto-flow: column;
-  gap: 16px 16px;
-  width: fit-content;
-  position: relative;
-  margin-top: 180px; /* Push down the grid to prevent date overlap */
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 12px; /* Slightly reduced gap to match smaller icons */
+  width: max-content;
+  
+  /* Anchor to the bottom center */
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+
+  /* Dark Box matched exactly to the Music Widget */
+  background: rgba(15, 23, 42, 1);
+  border: 1px solid rgb(30, 113, 104);
+  backdrop-filter: blur(12px);
+  padding: 8px 16px;
+  border-radius: 20px; /* Gives the dock a clean, pill-shaped edge */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .custom-shortcut {
@@ -44,9 +57,12 @@ body, html, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 60px;
-  height: 60px;
-  border-radius: 14px;
+  
+  /* Decreased from 60px to 48px */
+  width: 48px;
+  height: 48px;
+  
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -55,7 +71,7 @@ body, html, #root {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   transform: translateY(-2px) scale(1.06);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .custom-shortcut:active {
@@ -67,8 +83,10 @@ body, html, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  
+  /* Decreased from 40px to 30px */
+  width: 30px;
+  height: 30px;
 }
 
 .custom-icon-img {
@@ -79,7 +97,7 @@ body, html, #root {
 }
 
 .custom-app-icon {
-  font-size: 32px;
+  font-size: 26px; /* Scaled down slightly to fit the new container */
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
 }
 
