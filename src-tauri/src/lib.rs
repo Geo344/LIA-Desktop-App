@@ -2,12 +2,14 @@ mod audio;
 mod shortcuts;
 mod media;
 mod wallpaper;
+mod calendar;
 
 use tauri::Manager;
 use audio::{play_ping, AppAudioState};
 use shortcuts::{get_desktop_items, launch_item};
 use media::{get_media_state, media_play_pause, media_next, media_prev};
 use wallpaper::attach_to_workerw;
+use calendar::fetch_todays_events;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -30,7 +32,8 @@ pub fn run() {
             get_media_state,
             media_play_pause,
             media_next,
-            media_prev
+            media_prev,
+            fetch_todays_events
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

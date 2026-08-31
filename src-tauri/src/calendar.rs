@@ -192,36 +192,48 @@ pub async fn fetch_todays_events() -> Result<Vec<AgendaEvent>, String> {
         let title = item.summary.unwrap_or_else(|| "Busy".to_string());
         
         let mut starts_in_ten = false;
+        let mut is_in_progress = false;
         let mut is_all_day = false;
         let mut start_time_str = String::new();
         let mut end_time_str = String::new();
 
         if let Some(start) = item.start {
             if let Some(dt_str) = start.date_time {
-                // Parse standard timed event
                 if let Ok(parsed_start) = chrono::DateTime::parse_from_rfc3339(&dt_str) {
                     let start_utc = parsed_start.with_timezone(&Utc);
                     let now_utc = now.with_timezone(&Utc);
-                    
-                    // Trigger the warning flag if the event is strictly within the next 10 minutes
-                    if start_utc > now_utc && start_utc <= warning_threshold {
+
+                    // Check end time to see if event is already over or currently active
+                    if let Some(end) = &item.end {
+                        if let Some(end_dt_str) = &end.date_time {
+                            if let Ok(parsed_end) = chrono::DateTime::parse_from_rfc3339(end_dt_str) {
+                                let end_utc = parsed_end.with_timezone(&Utc);
+                                
+                                // 1. Drop events that already ended
+                                if end_utc <= now_utc {
+                                    continue;
+                                }
+
+                                // 2. Mark event as in-progress
+                                if start_utc <= now_utc && end_utc > now_utc {
+                                    is_in_progress = true;
+                                }
+
+                                end_time_str = parsed_end.with_timezone(&Local).format("%I:%M %p").to_string();
+                            }
+                        }
+                    }
+
+                    // 3. Mark 10-minute upcoming warning
+                    if !is_in_progress && start_utc > now_utc && start_utc <= warning_threshold {
                         starts_in_ten = true;
                     }
 
                     start_time_str = parsed_start.with_timezone(&Local).format("%I:%M %p").to_string();
                 }
             } else if let Some(date_str) = start.date {
-                // Handle All-Day events
                 is_all_day = true;
                 start_time_str = date_str;
-            }
-        }
-
-        if let Some(end) = item.end {
-            if let Some(dt_str) = end.date_time {
-                if let Ok(parsed_end) = chrono::DateTime::parse_from_rfc3339(&dt_str) {
-                    end_time_str = parsed_end.with_timezone(&Local).format("%I:%M %p").to_string();
-                }
             }
         }
 
@@ -230,6 +242,7 @@ pub async fn fetch_todays_events() -> Result<Vec<AgendaEvent>, String> {
             start_time: start_time_str,
             end_time: end_time_str,
             starts_in_ten,
+            is_in_progress,
             is_all_day,
         });
     }
