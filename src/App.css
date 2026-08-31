@@ -310,25 +310,60 @@ body, html, #root {
 /* --- Schedule Widget --- */
 .schedule-widget {
   position: absolute;
-  top: 200px; /* Pushed down to clear the Date widget above it */
-  left: 32px; /* Aligns perfectly with the left edge of your Time and Date widgets */
+  top: 200px; 
+  left: 0; /* Anchors the widget flush against the left edge */
   width: 240px;
-  height: 180px;
+  height: 132px;
 
   display: flex;
   flex-direction: column;
-  padding: 12px 16px;
+  padding: 12px 32px;
 
-  /* Theme matched to Music Widget & Dock */
+  /* Theme matched to Music Widget */
   background: rgba(15, 23, 42, 1);
   border: 1px solid rgb(30, 113, 104);
+  border-left: none; /* Removes the border where it touches the screen edge */
   backdrop-filter: blur(12px);
-  border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  
+  /* Flips the curvature: sharp on the left, rounded on the right */
+  border-radius: 0 16px 16px 0; 
+  
+  /* Casts the drop shadow out to the right */
+  box-shadow: 4px 8px 24px rgba(0, 0, 0, 0.45);
 
   color: #efdae5;
   font-family: "Avenir Next", Avenir, system-ui, sans-serif;
   z-index: 90;
+}
+
+/* 1. Top-Left Inverted Curve (Mirrored) */
+.schedule-widget::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  
+  /* Fills the bottom-left quadrant and scoops inward to the top-right */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 0 V 12 H 12 A 12 12 0 0 1 0 0 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 12 12 A 12 12 0 0 1 0 0' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* 2. Bottom-Left Inverted Curve (Mirrored) */
+.schedule-widget::after {
+  content: "";
+  position: absolute;
+  bottom: -12px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  
+  /* Fills the top-left quadrant and scoops inward to the bottom-right */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 12 V 0 H 12 A 12 12 0 0 0 0 12 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 12 0 A 12 12 0 0 0 0 12' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
 }
 
 .schedule-header {
@@ -354,7 +389,9 @@ body, html, #root {
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
+  padding-bottom: 8px; /* Creates a clean cushion at the bottom of the scroll area */
 }
 
 /* Custom discreet scrollbar */
@@ -374,6 +411,9 @@ body, html, #root {
   color: #efdae5;
   white-space: nowrap;
   overflow: hidden;
+  
+  /* Forces the row to maintain its full height instead of squishing when the list gets crowded */
+  flex-shrink: 0; 
 }
 
 /* In-progress active event highlight */
@@ -391,6 +431,9 @@ body, html, #root {
   background-color: #ff4d4f;
   box-shadow: 0 0 8px #ff4d4f;
   animation: pulse-dot 1.2s infinite ease-in-out;
+  
+  /* Gives the dot physical space to scale up without hitting the left bounding box */
+  margin-left: 4px; 
 }
 
 @keyframes pulse-dot {
