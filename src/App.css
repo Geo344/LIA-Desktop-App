@@ -718,3 +718,31 @@ body, html, #root {
   width: 20px;
   height: 20px;
 }
+
+/* --- Completed Section Styling --- */
+.completed-section {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.completed-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(239, 218, 229, 0.4);
+  padding: 8px 0 6px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px dashed rgba(30, 113, 104, 0.4);
+  user-select: none;
+}
+
+.completed-row {
+  opacity: 0.7;
+}
+
+.invisible-handle {
+  visibility: hidden;
+  pointer-events: none;
+}

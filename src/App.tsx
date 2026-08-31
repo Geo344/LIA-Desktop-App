@@ -281,6 +281,10 @@ function NotepadWidget() {
     setDraggedIdx(targetIdx);
   };
 
+  // Split tasks for rendering
+  const activeTodos = userData.todos.filter((t) => !t.completed);
+  const completedTodos = userData.todos.filter((t) => t.completed);
+
   return (
     <div className="notepad-widget">
       {/* Content Area */}
@@ -304,47 +308,90 @@ function NotepadWidget() {
               onKeyDown={handleAddTask}
             />
             <div className="todo-list">
-              {userData.todos.map((todo, index) => (
-                <div
-                  key={todo.id}
-                  className={`todo-item ${draggedIdx === index ? "dragging" : ""}`}
-                  onPointerEnter={() => handlePointerEnter(index)}
-                >
-                  {/* Subtle Drag Handle Icon acts as the grip point */}
-                  <span 
-                    className="drag-handle"
-                    onPointerDown={(e) => handlePointerDown(e, index)}
+              
+              {/* Active Tasks (Draggable) */}
+              {activeTodos.map((todo) => {
+                const globalIdx = userData.todos.findIndex((t) => t.id === todo.id);
+                return (
+                  <div
+                    key={todo.id}
+                    className={`todo-item ${draggedIdx === globalIdx ? "dragging" : ""}`}
+                    onPointerEnter={() => handlePointerEnter(globalIdx)}
                   >
-                    ⋮⋮
-                  </span>
-                  
-                  <div className="keep-checkbox-wrapper">
+                    <span 
+                      className="drag-handle"
+                      onPointerDown={(e) => handlePointerDown(e, globalIdx)}
+                    >
+                      ⋮⋮
+                    </span>
+                    
+                    <div className="keep-checkbox-wrapper">
+                      <input
+                        type="checkbox"
+                        className="keep-checkbox"
+                        checked={todo.completed}
+                        onChange={() => toggleTodo(todo.id)}
+                      />
+                    </div>
                     <input
-                      type="checkbox"
-                      className="keep-checkbox"
-                      checked={todo.completed}
-                      onChange={() => toggleTodo(todo.id)}
+                      type="text"
+                      className="todo-text"
+                      value={todo.text}
+                      onChange={(e) => {
+                        const newText = e.target.value;
+                        setUserData((prev) => ({
+                          ...prev,
+                          todos: prev.todos.map((t) =>
+                            t.id === todo.id ? { ...t, text: newText } : t
+                          ),
+                        }));
+                      }}
                     />
+                    <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
+                      ✕
+                    </button>
                   </div>
-                  <input
-                    type="text"
-                    className={`todo-text ${todo.completed ? "completed" : ""}`}
-                    value={todo.text}
-                    onChange={(e) => {
-                      const newText = e.target.value;
-                      setUserData((prev) => ({
-                        ...prev,
-                        todos: prev.todos.map((t) =>
-                          t.id === todo.id ? { ...t, text: newText } : t
-                        ),
-                      }));
-                    }}
-                  />
-                  <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
-                    ✕
-                  </button>
+                );
+              })}
+
+              {/* Completed Tasks (Permanently Pinned, Counts Items) */}
+              <div className="completed-section">
+                <div className="completed-header">
+                  {completedTodos.length} Completed
                 </div>
-              ))}
+                {completedTodos.map((todo) => (
+                  <div key={todo.id} className="todo-item completed-row">
+                    <span className="drag-handle invisible-handle">⋮⋮</span>
+                    
+                    <div className="keep-checkbox-wrapper">
+                      <input
+                        type="checkbox"
+                        className="keep-checkbox"
+                        checked={todo.completed}
+                        onChange={() => toggleTodo(todo.id)}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      className="todo-text completed"
+                      value={todo.text}
+                      onChange={(e) => {
+                        const newText = e.target.value;
+                        setUserData((prev) => ({
+                          ...prev,
+                          todos: prev.todos.map((t) =>
+                            t.id === todo.id ? { ...t, text: newText } : t
+                          ),
+                        }));
+                      }}
+                    />
+                    <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+
             </div>
           </div>
         )}
