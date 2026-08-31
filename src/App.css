@@ -172,7 +172,7 @@ body, html, #root {
     "cover controls";
   
   /* Explicitly lock the first column to the exact size of your cover */
-  grid-template-columns: 84px 1fr; 
+  grid-template-columns: 96px 1fr;
   
   column-gap: 16px;
   row-gap: 4px;
@@ -231,8 +231,8 @@ body, html, #root {
 
 .album-cover {
   grid-area: cover;
-  width: 84px;
-  height: 84px;
+  width: 96px;
+  height: 96px;
   border-radius: 8px;
   object-fit: cover;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
