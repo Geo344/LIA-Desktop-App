@@ -3,8 +3,8 @@ use std::io::Cursor;
 use tauri::State;
 
 // Embed both sound effects directly into the compiled Rust binary
-static SHORTCUT_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/ConfirmSound.wav");
-static MUSIC_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/MusicButton.wav");
+static SHORTCUT_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/Shortcut-button.wav");
+static MUSIC_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/Music-button.wav");
 
 // Thread-safe state holding only the stream handle
 pub struct AppAudioState {
