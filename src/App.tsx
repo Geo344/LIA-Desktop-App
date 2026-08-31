@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import wallpaperImg from "./assets/Vivy_Wallpaper.png";
@@ -189,6 +189,10 @@ function NotepadWidget() {
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
   const [newTask, setNewTask] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
+  
+  // --- Pure React Drag and Drop State ---
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const dragItemRef = useRef<number | null>(null);
 
   // 1. Load data on boot
   useEffect(() => {
@@ -208,6 +212,16 @@ function NotepadWidget() {
     }, 500);
     return () => clearTimeout(timer);
   }, [userData, isLoaded]);
+
+  // 3. Global mouse release for drag and drop
+  useEffect(() => {
+    const handleGlobalUp = () => {
+      dragItemRef.current = null;
+      setDraggedIdx(null);
+    };
+    window.addEventListener("pointerup", handleGlobalUp);
+    return () => window.removeEventListener("pointerup", handleGlobalUp);
+  }, []);
 
   // --- Note Handlers ---
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -243,6 +257,30 @@ function NotepadWidget() {
     }));
   };
 
+  // --- Pointer Drag Handlers ---
+  const handlePointerDown = (e: React.PointerEvent, index: number) => {
+    if ((e.target as HTMLElement).classList.contains("drag-handle")) {
+      dragItemRef.current = index;
+      setDraggedIdx(index);
+      e.preventDefault();
+    }
+  };
+
+  const handlePointerEnter = (targetIdx: number) => {
+    const currentDrag = dragItemRef.current;
+    if (currentDrag === null || currentDrag === targetIdx) return;
+
+    setUserData((prev) => {
+      const newTodos = [...prev.todos];
+      const [movedTodo] = newTodos.splice(currentDrag, 1);
+      newTodos.splice(targetIdx, 0, movedTodo);
+      return { ...prev, todos: newTodos };
+    });
+
+    dragItemRef.current = targetIdx;
+    setDraggedIdx(targetIdx);
+  };
+
   return (
     <div className="notepad-widget">
       {/* Content Area */}
@@ -266,8 +304,20 @@ function NotepadWidget() {
               onKeyDown={handleAddTask}
             />
             <div className="todo-list">
-              {userData.todos.map((todo) => (
-                <div key={todo.id} className="todo-item">
+              {userData.todos.map((todo, index) => (
+                <div
+                  key={todo.id}
+                  className={`todo-item ${draggedIdx === index ? "dragging" : ""}`}
+                  onPointerEnter={() => handlePointerEnter(index)}
+                >
+                  {/* Subtle Drag Handle Icon acts as the grip point */}
+                  <span 
+                    className="drag-handle"
+                    onPointerDown={(e) => handlePointerDown(e, index)}
+                  >
+                    ⋮⋮
+                  </span>
+                  
                   <div className="keep-checkbox-wrapper">
                     <input
                       type="checkbox"
@@ -307,7 +357,6 @@ function NotepadWidget() {
           onClick={() => setActiveTab("notes")}
           title="Notes"
         >
-          {/* Notes SVG Icon */}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
@@ -321,7 +370,6 @@ function NotepadWidget() {
           onClick={() => setActiveTab("todos")}
           title="To-Do List"
         >
-          {/* To-Do List SVG Icon */}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 11 12 14 22 4" />
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />

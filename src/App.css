@@ -588,10 +588,38 @@ body, html, #root {
   border-radius: 4px;
 }
 
+/* Drag and Drop Pointer Styling */
 .todo-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  padding: 2px 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  border-radius: 4px;
+}
+
+.todo-item.dragging {
+  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.drag-handle {
+  font-size: 14px;
+  color: rgba(239, 218, 229, 0.3);
+  letter-spacing: -2px;
+  margin-right: 2px;
+  user-select: none;
+  cursor: grab;
+  touch-action: none; /* Prevents Windows from scrolling while dragging */
+  transition: color 0.2s ease;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.todo-item:hover .drag-handle {
+  color: rgba(239, 218, 229, 0.8);
 }
 
 /* Google Keep Square Checkbox */
