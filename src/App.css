@@ -470,3 +470,223 @@ body, html, #root {
   color: rgba(255, 255, 255, 0.45);
   font-style: italic;
 }
+
+/* --- Dual Notes/To-Do Widget --- */
+.notepad-widget {
+  position: absolute;
+  top: 360px; /* Positioned directly beneath the Schedule Widget */
+  left: 0;
+  width: 320px;
+  height: 280px;
+
+  display: flex;
+  flex-direction: row; /* Aligns content left, tabs right */
+
+  /* Theme matched to Music & Schedule Widgets */
+  background: rgba(15, 23, 42, 1);
+  border: 1px solid rgb(30, 113, 104);
+  border-left: none;
+  backdrop-filter: blur(12px);
+  
+  border-radius: 0 16px 16px 0; 
+  box-shadow: 4px 8px 24px rgba(0, 0, 0, 0.45);
+
+  color: #efdae5;
+  font-family: "Avenir Next", Avenir, system-ui, sans-serif;
+  z-index: 90;
+}
+
+/* 1. Top-Left Inverted Curve */
+.notepad-widget::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 0 V 12 H 12 A 12 12 0 0 1 0 0 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 12 12 A 12 12 0 0 1 0 0' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* 2. Bottom-Left Inverted Curve */
+.notepad-widget::after {
+  content: "";
+  position: absolute;
+  bottom: -12px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 12 V 0 H 12 A 12 12 0 0 0 0 12 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 12 0 A 12 12 0 0 0 0 12' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Content Area */
+.notepad-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 8px 16px 20px;
+  overflow: hidden;
+}
+
+/* Notes Textarea */
+.notes-textarea {
+  all: unset;
+  flex: 1;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #efdae5;
+  resize: none;
+  overflow-y: auto;
+}
+.notes-textarea::placeholder {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+}
+.notes-textarea::-webkit-scrollbar {
+  width: 4px;
+}
+.notes-textarea::-webkit-scrollbar-thumb {
+  background: rgba(30, 113, 104, 0.6);
+  border-radius: 4px;
+}
+
+/* Google Keep-Style To-Do List */
+.todo-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 12px;
+}
+.todo-input {
+  all: unset;
+  font-size: 13px;
+  color: #efdae5;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
+}
+.todo-input::placeholder {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+}
+.todo-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.todo-list::-webkit-scrollbar {
+  width: 4px;
+}
+.todo-list::-webkit-scrollbar-thumb {
+  background: rgba(30, 113, 104, 0.6);
+  border-radius: 4px;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Google Keep Square Checkbox */
+.keep-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.keep-checkbox {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(239, 218, 229, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+.keep-checkbox:checked {
+  background-color: rgba(239, 218, 229, 0.2);
+  border-color: rgba(239, 218, 229, 0.8);
+}
+.keep-checkbox:checked::after {
+  content: "✔";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -55%);
+  font-size: 11px;
+  color: #efdae5;
+}
+
+.todo-text {
+  all: unset;
+  flex: 1;
+  font-size: 13px;
+  color: #efdae5;
+  transition: color 0.2s ease;
+}
+.todo-text.completed {
+  text-decoration: line-through;
+  color: rgba(239, 218, 229, 0.4);
+}
+
+.todo-delete {
+  all: unset;
+  cursor: pointer;
+  color: rgba(255, 77, 79, 0.6);
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+.todo-item:hover .todo-delete {
+  opacity: 1;
+}
+.todo-delete:hover {
+  color: rgba(255, 77, 79, 1);
+}
+
+/* Right-Side Tab Bar */
+.notepad-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 48px;
+  border-left: 1px solid rgba(30, 113, 104, 0.4);
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 0 15px 15px 0;
+}
+
+.tab-button {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 50%;
+  cursor: pointer;
+  color: rgba(239, 218, 229, 0.4);
+  transition: all 0.2s ease;
+}
+.tab-button:first-child {
+  border-radius: 0 15px 0 0;
+}
+.tab-button:last-child {
+  border-radius: 0 0 15px 0;
+}
+.tab-button:hover {
+  color: rgba(56, 225, 209, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+}
+.tab-button.active {
+  color: rgb(56, 225, 209);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 3px 0 0 rgb(56, 225, 209);
+}
+.tab-button svg {
+  width: 20px;
+  height: 20px;
+}

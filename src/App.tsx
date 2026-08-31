@@ -45,6 +45,17 @@ interface AgendaEvent {
   is_all_day: boolean;
 }
 
+interface TodoItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+interface UserData {
+  todos: TodoItem[];
+  notes: string;
+}
+
 // Mapping of customized shortcut icons to desktop shortcuts
 const SHORTCUT_CONFIG: ShortcutConfig[] = [
   { matchName: "Recycle Bin", icon: TrashIcon },
@@ -172,6 +183,155 @@ function MusicWidget() {
   );
 }
 
+// --- Isolated Notepad Widget Component ---
+function NotepadWidget() {
+  const [userData, setUserData] = useState<UserData>({ todos: [], notes: "" });
+  const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
+  const [newTask, setNewTask] = useState("");
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // 1. Load data on boot
+  useEffect(() => {
+    invoke<UserData>("load_user_data")
+      .then((data) => {
+        setUserData(data);
+        setIsLoaded(true);
+      })
+      .catch(console.error);
+  }, []);
+
+  // 2. Debounced auto-save to prevent disk thrashing while typing
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timer = setTimeout(() => {
+      invoke("save_user_data", { data: userData }).catch(console.error);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [userData, isLoaded]);
+
+  // --- Note Handlers ---
+  const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setUserData((prev) => ({ ...prev, notes: e.target.value }));
+  };
+
+  // --- To-Do Handlers ---
+  const handleAddTask = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && newTask.trim() !== "") {
+      const newTodo: TodoItem = {
+        id: crypto.randomUUID(),
+        text: newTask.trim(),
+        completed: false,
+      };
+      setUserData((prev) => ({ ...prev, todos: [...prev.todos, newTodo] }));
+      setNewTask("");
+    }
+  };
+
+  const toggleTodo = (id: string) => {
+    setUserData((prev) => ({
+      ...prev,
+      todos: prev.todos.map((todo) =>
+        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+      ),
+    }));
+  };
+
+  const deleteTodo = (id: string) => {
+    setUserData((prev) => ({
+      ...prev,
+      todos: prev.todos.filter((todo) => todo.id !== id),
+    }));
+  };
+
+  return (
+    <div className="notepad-widget">
+      {/* Content Area */}
+      <div className="notepad-content">
+        {activeTab === "notes" ? (
+          <textarea
+            className="notes-textarea"
+            placeholder="Jot down your thoughts..."
+            value={userData.notes}
+            onChange={handleNoteChange}
+            spellCheck={false}
+          />
+        ) : (
+          <div className="todo-container">
+            <input
+              type="text"
+              className="todo-input"
+              placeholder="+ Add a task (Press Enter)"
+              value={newTask}
+              onChange={(e) => setNewTask(e.target.value)}
+              onKeyDown={handleAddTask}
+            />
+            <div className="todo-list">
+              {userData.todos.map((todo) => (
+                <div key={todo.id} className="todo-item">
+                  <div className="keep-checkbox-wrapper">
+                    <input
+                      type="checkbox"
+                      className="keep-checkbox"
+                      checked={todo.completed}
+                      onChange={() => toggleTodo(todo.id)}
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    className={`todo-text ${todo.completed ? "completed" : ""}`}
+                    value={todo.text}
+                    onChange={(e) => {
+                      const newText = e.target.value;
+                      setUserData((prev) => ({
+                        ...prev,
+                        todos: prev.todos.map((t) =>
+                          t.id === todo.id ? { ...t, text: newText } : t
+                        ),
+                      }));
+                    }}
+                  />
+                  <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right-Side Tab Navigation */}
+      <div className="notepad-tabs">
+        <button
+          className={`tab-button ${activeTab === "notes" ? "active" : ""}`}
+          onClick={() => setActiveTab("notes")}
+          title="Notes"
+        >
+          {/* Notes SVG Icon */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+        </button>
+        <button
+          className={`tab-button ${activeTab === "todos" ? "active" : ""}`}
+          onClick={() => setActiveTab("todos")}
+          title="To-Do List"
+        >
+          {/* To-Do List SVG Icon */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 11 12 14 22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // --- Main App Canvas ---
 export default function App() {
   const [items, setItems] = useState<DesktopItem[]>([]);
@@ -250,6 +410,9 @@ export default function App() {
 
       {/* Schedule Widget (Right side under Date/Time/Music) */}
       <ScheduleWidget />
+
+      {/* Notepad Widget */}
+      <NotepadWidget/>
       
       {/* Custom Shortcut Grid */}
       <div className="shortcuts-grid"> 
