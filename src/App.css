@@ -474,15 +474,14 @@ body, html, #root {
 /* --- Dual Notes/To-Do Widget --- */
 .notepad-widget {
   position: absolute;
-  top: 360px; /* Positioned directly beneath the Schedule Widget */
+  top: 360px; 
   left: 0;
   width: 320px;
   height: 280px;
 
   display: flex;
-  flex-direction: row; /* Aligns content left, tabs right */
+  flex-direction: row; 
 
-  /* Theme matched to Music & Schedule Widgets */
   background: rgba(15, 23, 42, 1);
   border: 1px solid rgb(30, 113, 104);
   border-left: none;
@@ -494,6 +493,9 @@ body, html, #root {
   color: #efdae5;
   font-family: "Avenir Next", Avenir, system-ui, sans-serif;
   z-index: 90;
+  
+  /* Adds smooth sliding animation */
+  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* 1. Top-Left Inverted Curve */
@@ -520,6 +522,11 @@ body, html, #root {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 12 V 0 H 12 A 12 12 0 0 0 0 12 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 12 0 A 12 12 0 0 0 0 12' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 10;
+}
+
+/* Slides the widget left, leaving exactly the 48px tabs visible */
+.notepad-widget.hidden {
+  transform: translateX(calc(-100% + 48px));
 }
 
 /* Content Area */
@@ -670,6 +677,7 @@ body, html, #root {
 
 /* Right-Side Tab Bar */
 .notepad-tabs {
+  position: relative; /* Essential for positioning the hide button */
   display: flex;
   flex-direction: column;
   width: 48px;
@@ -706,6 +714,35 @@ body, html, #root {
 .tab-button svg {
   width: 20px;
   height: 20px;
+}
+
+/* --- Hide Widget Button --- */
+.hide-widget-btn {
+  all: unset;
+  position: absolute;
+  /* Positions it perfectly outside the tab bar, just to the left */
+  left: -28px; 
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(239, 218, 229, 0.4);
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.hide-widget-btn:hover {
+  color: rgb(56, 225, 209);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hide-widget-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* --- Completed Section Styling --- */

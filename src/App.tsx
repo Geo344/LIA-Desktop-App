@@ -195,9 +195,10 @@ function NotepadWidget() {
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
   const [activeListId, setActiveListId] = useState<string | null>(null);
   
-  // --- Archive View State ---
+  // --- Archive & Visibility State ---
   const [showArchivedView, setShowArchivedView] = useState(false);
   const [archiveSearchQuery, setArchiveSearchQuery] = useState("");
+  const [isHidden, setIsHidden] = useState(true); // Hidden by default
   
   const [isLoaded, setIsLoaded] = useState(false);
   
@@ -350,8 +351,6 @@ function NotepadWidget() {
 
   // Split data for rendering
   const activeLists = userData.lists.filter((l) => !l.archived);
-  
-  // Filter archived lists by the search query (treating empty titles as "Untitled")
   const archivedLists = userData.lists
     .filter((l) => l.archived)
     .filter((l) => {
@@ -364,7 +363,7 @@ function NotepadWidget() {
   const completedTodos = activeList?.items.filter((t) => t.completed) || [];
 
   return (
-    <div className="notepad-widget">
+    <div className={`notepad-widget ${isHidden ? "hidden" : ""}`}>
       {/* Content Area */}
       <div className="notepad-content">
         {activeTab === "notes" ? (
@@ -427,7 +426,7 @@ function NotepadWidget() {
                     className="archive-nav-btn" 
                     onClick={() => {
                       setShowArchivedView(false);
-                      setArchiveSearchQuery(""); // Clear search when leaving
+                      setArchiveSearchQuery("");
                     }}
                   >
                     Back
@@ -499,7 +498,7 @@ function NotepadWidget() {
                 </div>
 
                 <div className="todo-list">
-                  {/* Active Tasks (Draggable) */}
+                  {/* Active Tasks */}
                   {activeTodos.map((todo) => {
                     const globalIdx = activeList!.items.findIndex((t) => t.id === todo.id);
                     return (
@@ -534,37 +533,25 @@ function NotepadWidget() {
                               ...prev,
                               lists: prev.lists.map((l) =>
                                 l.id === activeListId
-                                  ? {
-                                      ...l,
-                                      items: l.items.map((t) =>
-                                        t.id === todo.id ? { ...t, text: newText } : t
-                                      ),
-                                    }
+                                  ? { ...l, items: l.items.map((t) => t.id === todo.id ? { ...t, text: newText } : t) }
                                   : l
                               ),
                             }));
                           }}
                         />
-                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
-                          ✕
-                        </button>
+                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>✕</button>
                       </div>
                     );
                   })}
 
-                  <button className="add-item-btn" onClick={handleAddNewTask}>
-                    + Item
-                  </button>
+                  <button className="add-item-btn" onClick={handleAddNewTask}>+ Item</button>
 
                   {/* Completed Tasks */}
                   <div className="completed-section">
-                    <div className="completed-header">
-                      {completedTodos.length} Completed
-                    </div>
+                    <div className="completed-header">{completedTodos.length} Completed</div>
                     {completedTodos.map((todo) => (
                       <div key={todo.id} className="todo-item completed-row">
                         <span className="drag-handle invisible-handle">⋮⋮</span>
-                        
                         <div className="keep-checkbox-wrapper">
                           <input
                             type="checkbox"
@@ -583,20 +570,13 @@ function NotepadWidget() {
                               ...prev,
                               lists: prev.lists.map((l) =>
                                 l.id === activeListId
-                                  ? {
-                                      ...l,
-                                      items: l.items.map((t) =>
-                                        t.id === todo.id ? { ...t, text: newText } : t
-                                      ),
-                                    }
+                                  ? { ...l, items: l.items.map((t) => t.id === todo.id ? { ...t, text: newText } : t) }
                                   : l
                               ),
                             }));
                           }}
                         />
-                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
-                          ✕
-                        </button>
+                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>✕</button>
                       </div>
                     ))}
                   </div>
@@ -610,9 +590,20 @@ function NotepadWidget() {
 
       {/* Right-Side Tab Navigation */}
       <div className="notepad-tabs">
+        {/* Hide Widget Button */}
+        <button 
+          className="hide-widget-btn" 
+          onClick={() => setIsHidden(true)}
+          title="Hide Notepad"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+
         <button
           className={`tab-button ${activeTab === "notes" ? "active" : ""}`}
-          onClick={() => setActiveTab("notes")}
+          onClick={() => { setActiveTab("notes"); setIsHidden(false); }}
           title="Notes"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -625,7 +616,7 @@ function NotepadWidget() {
         </button>
         <button
           className={`tab-button ${activeTab === "todos" ? "active" : ""}`}
-          onClick={() => setActiveTab("todos")}
+          onClick={() => { setActiveTab("todos"); setIsHidden(false); }}
           title="To-Do List"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
