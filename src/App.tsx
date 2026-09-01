@@ -54,6 +54,7 @@ interface TodoItem {
 interface TodoList {
   id: string;
   title: string;
+  archived: boolean;
   items: TodoItem[];
 }
 
@@ -238,6 +239,7 @@ function NotepadWidget() {
     const newList: TodoList = {
       id: crypto.randomUUID(),
       title: "",
+      archived: false,
       items: [],
     };
     setUserData((prev) => ({ ...prev, lists: [...prev.lists, newList] }));
@@ -251,8 +253,16 @@ function NotepadWidget() {
     }));
   };
 
+  const toggleArchiveList = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); 
+    setUserData((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => (l.id === id ? { ...l, archived: !l.archived } : l)),
+    }));
+  };
+
   const deleteList = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevents clicking the delete button from opening the list
+    e.stopPropagation(); 
     setUserData((prev) => ({
       ...prev,
       lists: prev.lists.filter((l) => l.id !== id),
@@ -333,7 +343,10 @@ function NotepadWidget() {
     setDraggedIdx(targetIdx);
   };
 
-  // Split tasks for rendering based on the active list
+  // Split data for rendering
+  const activeLists = userData.lists.filter((l) => !l.archived);
+  const archivedLists = userData.lists.filter((l) => l.archived);
+
   const activeList = userData.lists.find((l) => l.id === activeListId);
   const activeTodos = activeList?.items.filter((t) => !t.completed) || [];
   const completedTodos = activeList?.items.filter((t) => t.completed) || [];
@@ -359,7 +372,9 @@ function NotepadWidget() {
                   + New List
                 </button>
                 <div className="directory-list">
-                  {userData.lists.map((list) => (
+                  
+                  {/* Active Lists */}
+                  {activeLists.map((list) => (
                     <div
                       key={list.id}
                       className="directory-item"
@@ -368,14 +383,68 @@ function NotepadWidget() {
                       <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
                         {list.title || "Untitled"}
                       </span>
-                      <button
-                        className="todo-delete"
-                        onClick={(e) => deleteList(list.id, e)}
-                      >
-                        ✕
-                      </button>
+                      <div className="directory-actions">
+                        <button
+                          className="list-action-btn"
+                          onClick={(e) => toggleArchiveList(list.id, e)}
+                          title="Archive List"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                            <rect x="1" y="3" width="22" height="5"></rect>
+                            <line x1="10" y1="12" x2="14" y2="12"></line>
+                          </svg>
+                        </button>
+                        <button
+                          className="list-action-btn delete"
+                          onClick={(e) => deleteList(list.id, e)}
+                          title="Delete List"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   ))}
+
+                  {/* Archived Lists */}
+                  <div className="completed-section">
+                    <div className="completed-header">
+                      {archivedLists.length} Archived
+                    </div>
+                    {archivedLists.map((list) => (
+                      <div
+                        key={list.id}
+                        className="directory-item archived-row"
+                        onClick={() => setActiveListId(list.id)}
+                      >
+                        <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
+                          {list.title || "Untitled"}
+                        </span>
+                        <div className="directory-actions">
+                          <button
+                            className="list-action-btn"
+                            onClick={(e) => toggleArchiveList(list.id, e)}
+                            title="Unarchive List"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                              <rect x="1" y="3" width="22" height="5"></rect>
+                              <line x1="12" y1="17" x2="12" y2="12"></line>
+                              <polyline points="15 14 12 11 9 14"></polyline>
+                            </svg>
+                          </button>
+                          <button
+                            className="list-action-btn delete"
+                            onClick={(e) => deleteList(list.id, e)}
+                            title="Delete List"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
                 </div>
               </div>
             ) : (
@@ -450,12 +519,11 @@ function NotepadWidget() {
                     );
                   })}
 
-                  {/* Add New Item Button (Placed below active tasks) */}
                   <button className="add-item-btn" onClick={handleAddNewTask}>
                     + Item
                   </button>
 
-                  {/* Completed Tasks (Permanently Pinned, Counts Items) */}
+                  {/* Completed Tasks */}
                   <div className="completed-section">
                     <div className="completed-header">
                       {completedTodos.length} Completed

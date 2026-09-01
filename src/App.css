@@ -817,8 +817,50 @@ body, html, #root {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.directory-item:hover .todo-delete {
+/* --- Directory Action Buttons --- */
+.directory-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.directory-item:hover .directory-actions {
   opacity: 1;
+}
+
+.list-action-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(239, 218, 229, 0.4);
+  transition: color 0.2s ease;
+}
+
+.list-action-btn:hover {
+  color: rgb(56, 225, 209);
+}
+
+.list-action-btn.delete {
+  font-size: 14px;
+  color: rgba(255, 77, 79, 0.6);
+}
+
+.list-action-btn.delete:hover {
+  color: rgba(255, 77, 79, 1);
+}
+
+.list-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Fades the text slightly to indicate it is archived */
+.directory-item.archived-row .directory-title {
+  opacity: 0.6;
 }
 
 .directory-title {

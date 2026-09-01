@@ -15,6 +15,8 @@ pub struct TodoItem {
 pub struct TodoList {
     pub id: String,
     pub title: String,
+    #[serde(default)] // Automatically assigns 'false' to existing lists without this property
+    pub archived: bool,
     pub items: Vec<TodoItem>,
 }
 
