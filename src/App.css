@@ -494,8 +494,8 @@ body, html, #root {
   font-family: "Avenir Next", Avenir, system-ui, sans-serif;
   z-index: 90;
   
-  /* Adds smooth sliding animation */
-  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  /* Smooth sliding out animation */
+  transition: transform 1.1s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* 1. Top-Left Inverted Curve */
@@ -527,6 +527,9 @@ body, html, #root {
 /* Slides the widget left, leaving exactly the 48px tabs visible */
 .notepad-widget.hidden {
   transform: translateX(calc(-100% + 48px));
+
+  /* Faster transition used when hiding (sliding in) */
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* Content Area */

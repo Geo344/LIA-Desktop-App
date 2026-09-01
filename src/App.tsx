@@ -206,6 +206,20 @@ function NotepadWidget() {
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const dragItemRef = useRef<number | null>(null);
 
+  // --- Audio Helpers ---
+  const playClick = () => invoke("play_ping", { soundType: "notepad_click" }).catch(console.error);
+
+  const handleTabClick = (targetTab: "notes" | "todos") => {
+    if (isHidden) {
+      invoke("play_ping", { soundType: "notepad_open" }).catch(console.error);
+      setIsHidden(false);
+      setActiveTab(targetTab);
+    } else if (activeTab !== targetTab) {
+      invoke("play_ping", { soundType: "notepad_switch" }).catch(console.error);
+      setActiveTab(targetTab);
+    }
+  };
+
   // 1. Load data on boot
   useEffect(() => {
     invoke<UserData>("load_user_data")
@@ -261,6 +275,7 @@ function NotepadWidget() {
 
   const toggleArchiveList = (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); 
+    playClick();
     setUserData((prev) => ({
       ...prev,
       lists: prev.lists.map((l) => (l.id === id ? { ...l, archived: !l.archived } : l)),
@@ -269,6 +284,7 @@ function NotepadWidget() {
 
   const deleteList = (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); 
+    playClick();
     setUserData((prev) => ({
       ...prev,
       lists: prev.lists.filter((l) => l.id !== id),
@@ -279,6 +295,7 @@ function NotepadWidget() {
   // --- To-Do Handlers ---
   const handleAddNewTask = () => {
     if (!activeListId) return;
+    playClick();
     const newTodo: TodoItem = {
       id: crypto.randomUUID(),
       text: "",
@@ -293,6 +310,7 @@ function NotepadWidget() {
   };
 
   const toggleTodo = (todoId: string) => {
+    invoke("play_ping", { soundType: "notepad_check" }).catch(console.error);
     setUserData((prev) => ({
       ...prev,
       lists: prev.lists.map((l) =>
@@ -309,6 +327,7 @@ function NotepadWidget() {
   };
 
   const deleteTodo = (todoId: string) => {
+    playClick();
     setUserData((prev) => ({
       ...prev,
       lists: prev.lists.map((l) =>
@@ -393,7 +412,7 @@ function NotepadWidget() {
                       <div
                         key={list.id}
                         className="directory-item archived-row"
-                        onClick={() => setActiveListId(list.id)}
+                        onClick={() => { playClick(); setActiveListId(list.id); }}
                       >
                         <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
                           {list.title || "Untitled"}
@@ -425,6 +444,7 @@ function NotepadWidget() {
                   <button 
                     className="archive-nav-btn" 
                     onClick={() => {
+                      playClick();
                       setShowArchivedView(false);
                       setArchiveSearchQuery("");
                     }}
@@ -435,7 +455,7 @@ function NotepadWidget() {
               ) : (
                 /* 1st View: MAIN LIST DIRECTORY */
                 <div className="directory-view">
-                  <button className="add-list-btn" onClick={handleAddNewList}>
+                  <button className="add-list-btn" onClick={() => { playClick(); handleAddNewList(); }}>
                     + New List
                   </button>
                   <div className="directory-list">
@@ -443,7 +463,7 @@ function NotepadWidget() {
                       <div
                         key={list.id}
                         className="directory-item"
-                        onClick={() => setActiveListId(list.id)}
+                        onClick={() => { playClick(); setActiveListId(list.id); }}
                       >
                         <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
                           {list.title || "Untitled"}
@@ -473,7 +493,7 @@ function NotepadWidget() {
                   </div>
                   <button 
                     className="archive-nav-btn" 
-                    onClick={() => setShowArchivedView(true)}
+                    onClick={() => { playClick(); setShowArchivedView(true); }}
                   >
                     Archived Lists
                   </button>
@@ -490,7 +510,7 @@ function NotepadWidget() {
                     value={activeList?.title || ""}
                     onChange={(e) => handleTitleChange(activeListId, e.target.value)}
                   />
-                  <button className="back-btn" onClick={() => setActiveListId(null)} title="Back to Lists">
+                  <button className="back-btn" onClick={() => { playClick(); setActiveListId(null); }} title="Back to Lists">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 18 9 12 15 6" />
                     </svg>
@@ -498,7 +518,7 @@ function NotepadWidget() {
                 </div>
 
                 <div className="todo-list">
-                  {/* Active Tasks */}
+                  {/* Active Tasks (Draggable) */}
                   {activeTodos.map((todo) => {
                     const globalIdx = activeList!.items.findIndex((t) => t.id === todo.id);
                     return (
@@ -593,7 +613,7 @@ function NotepadWidget() {
         {/* Hide Widget Button */}
         <button 
           className="hide-widget-btn" 
-          onClick={() => setIsHidden(true)}
+          onClick={() => { playClick(); setIsHidden(true); }}
           title="Hide Notepad"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -603,7 +623,7 @@ function NotepadWidget() {
 
         <button
           className={`tab-button ${activeTab === "notes" ? "active" : ""}`}
-          onClick={() => { setActiveTab("notes"); setIsHidden(false); }}
+          onClick={() => handleTabClick("notes")}
           title="Notes"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -616,7 +636,7 @@ function NotepadWidget() {
         </button>
         <button
           className={`tab-button ${activeTab === "todos" ? "active" : ""}`}
-          onClick={() => { setActiveTab("todos"); setIsHidden(false); }}
+          onClick={() => handleTabClick("todos")}
           title="To-Do List"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
