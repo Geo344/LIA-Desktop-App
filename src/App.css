@@ -759,3 +759,129 @@ body, html, #root {
   color: rgba(239, 218, 229, 0.3);
   font-style: italic;
 }
+
+/* --- Multi-List Directory View --- */
+.directory-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.add-list-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(56, 225, 209, 0.8);
+  cursor: pointer;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
+  margin-bottom: 8px;
+  transition: color 0.2s ease;
+}
+
+.add-list-btn:hover {
+  color: rgba(56, 225, 209, 1);
+}
+
+.directory-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.directory-list::-webkit-scrollbar {
+  width: 4px;
+}
+.directory-list::-webkit-scrollbar-thumb {
+  background: rgba(30, 113, 104, 0.6);
+  border-radius: 4px;
+}
+
+.directory-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.directory-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.directory-item:hover .todo-delete {
+  opacity: 1;
+}
+
+.directory-title {
+  font-size: 13px;
+  color: #efdae5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.directory-title.untitled {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+}
+
+/* --- Active List Header (Title & Back Button) --- */
+.active-list-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.active-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
+}
+
+.list-title-input {
+  all: unset;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #efdae5;
+}
+
+.list-title-input::placeholder {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.back-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(239, 218, 229, 0.6);
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.back-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.back-btn:hover {
+  color: rgb(56, 225, 209);
+  background: rgba(255, 255, 255, 0.1);
+}

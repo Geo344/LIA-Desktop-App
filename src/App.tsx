@@ -51,8 +51,14 @@ interface TodoItem {
   completed: boolean;
 }
 
+interface TodoList {
+  id: string;
+  title: string;
+  items: TodoItem[];
+}
+
 interface UserData {
-  todos: TodoItem[];
+  lists: TodoList[];
   notes: string;
 }
 
@@ -184,8 +190,9 @@ function MusicWidget() {
 }
 
 function NotepadWidget() {
-  const [userData, setUserData] = useState<UserData>({ todos: [], notes: "" });
+  const [userData, setUserData] = useState<UserData>({ lists: [], notes: "" });
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
+  const [activeListId, setActiveListId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   
   // --- Pure React Drag and Drop State ---
@@ -226,29 +233,73 @@ function NotepadWidget() {
     setUserData((prev) => ({ ...prev, notes: e.target.value }));
   };
 
+  // --- List Directory Handlers ---
+  const handleAddNewList = () => {
+    const newList: TodoList = {
+      id: crypto.randomUUID(),
+      title: "",
+      items: [],
+    };
+    setUserData((prev) => ({ ...prev, lists: [...prev.lists, newList] }));
+    setActiveListId(newList.id);
+  };
+
+  const handleTitleChange = (id: string, newTitle: string) => {
+    setUserData((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => (l.id === id ? { ...l, title: newTitle } : l)),
+    }));
+  };
+
+  const deleteList = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevents clicking the delete button from opening the list
+    setUserData((prev) => ({
+      ...prev,
+      lists: prev.lists.filter((l) => l.id !== id),
+    }));
+    if (activeListId === id) setActiveListId(null);
+  };
+
   // --- To-Do Handlers ---
   const handleAddNewTask = () => {
+    if (!activeListId) return;
     const newTodo: TodoItem = {
       id: crypto.randomUUID(),
       text: "",
       completed: false,
     };
-    setUserData((prev) => ({ ...prev, todos: [...prev.todos, newTodo] }));
-  };
-
-  const toggleTodo = (id: string) => {
     setUserData((prev) => ({
       ...prev,
-      todos: prev.todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+      lists: prev.lists.map((l) =>
+        l.id === activeListId ? { ...l, items: [...l.items, newTodo] } : l
       ),
     }));
   };
 
-  const deleteTodo = (id: string) => {
+  const toggleTodo = (todoId: string) => {
     setUserData((prev) => ({
       ...prev,
-      todos: prev.todos.filter((todo) => todo.id !== id),
+      lists: prev.lists.map((l) =>
+        l.id === activeListId
+          ? {
+              ...l,
+              items: l.items.map((t) =>
+                t.id === todoId ? { ...t, completed: !t.completed } : t
+              ),
+            }
+          : l
+      ),
+    }));
+  };
+
+  const deleteTodo = (todoId: string) => {
+    setUserData((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) =>
+        l.id === activeListId
+          ? { ...l, items: l.items.filter((t) => t.id !== todoId) }
+          : l
+      ),
     }));
   };
 
@@ -263,22 +314,29 @@ function NotepadWidget() {
 
   const handlePointerEnter = (targetIdx: number) => {
     const currentDrag = dragItemRef.current;
-    if (currentDrag === null || currentDrag === targetIdx) return;
+    if (currentDrag === null || currentDrag === targetIdx || !activeListId) return;
 
     setUserData((prev) => {
-      const newTodos = [...prev.todos];
-      const [movedTodo] = newTodos.splice(currentDrag, 1);
-      newTodos.splice(targetIdx, 0, movedTodo);
-      return { ...prev, todos: newTodos };
+      const newLists = [...prev.lists];
+      const listIdx = newLists.findIndex((l) => l.id === activeListId);
+      if (listIdx === -1) return prev;
+
+      const newItems = [...newLists[listIdx].items];
+      const [movedItem] = newItems.splice(currentDrag, 1);
+      newItems.splice(targetIdx, 0, movedItem);
+
+      newLists[listIdx] = { ...newLists[listIdx], items: newItems };
+      return { ...prev, lists: newLists };
     });
 
     dragItemRef.current = targetIdx;
     setDraggedIdx(targetIdx);
   };
 
-  // Split tasks for rendering
-  const activeTodos = userData.todos.filter((t) => !t.completed);
-  const completedTodos = userData.todos.filter((t) => t.completed);
+  // Split tasks for rendering based on the active list
+  const activeList = userData.lists.find((l) => l.id === activeListId);
+  const activeTodos = activeList?.items.filter((t) => !t.completed) || [];
+  const completedTodos = activeList?.items.filter((t) => t.completed) || [];
 
   return (
     <div className="notepad-widget">
@@ -294,98 +352,157 @@ function NotepadWidget() {
           />
         ) : (
           <div className="todo-container">
-            <div className="todo-list">
-              
-              {/* Active Tasks (Draggable) */}
-              {activeTodos.map((todo) => {
-                const globalIdx = userData.todos.findIndex((t) => t.id === todo.id);
-                return (
-                  <div
-                    key={todo.id}
-                    className={`todo-item ${draggedIdx === globalIdx ? "dragging" : ""}`}
-                    onPointerEnter={() => handlePointerEnter(globalIdx)}
-                  >
-                    <span 
-                      className="drag-handle"
-                      onPointerDown={(e) => handlePointerDown(e, globalIdx)}
+            {/* DIRECTORY VIEW */}
+            {!activeListId ? (
+              <div className="directory-view">
+                <button className="add-list-btn" onClick={handleAddNewList}>
+                  + New List
+                </button>
+                <div className="directory-list">
+                  {userData.lists.map((list) => (
+                    <div
+                      key={list.id}
+                      className="directory-item"
+                      onClick={() => setActiveListId(list.id)}
                     >
-                      ⋮⋮
-                    </span>
-                    
-                    <div className="keep-checkbox-wrapper">
-                      <input
-                        type="checkbox"
-                        className="keep-checkbox"
-                        checked={todo.completed}
-                        onChange={() => toggleTodo(todo.id)}
-                      />
+                      <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
+                        {list.title || "Untitled"}
+                      </span>
+                      <button
+                        className="todo-delete"
+                        onClick={(e) => deleteList(list.id, e)}
+                      >
+                        ✕
+                      </button>
                     </div>
-                    <input
-                      type="text"
-                      className="todo-text"
-                      placeholder="Empty task..."
-                      value={todo.text}
-                      onChange={(e) => {
-                        const newText = e.target.value;
-                        setUserData((prev) => ({
-                          ...prev,
-                          todos: prev.todos.map((t) =>
-                            t.id === todo.id ? { ...t, text: newText } : t
-                          ),
-                        }));
-                      }}
-                    />
-                    <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
-                      ✕
-                    </button>
-                  </div>
-                );
-              })}
-
-              {/* Add New Item Button (Placed below active tasks) */}
-              <button className="add-item-btn" onClick={handleAddNewTask}>
-                + Item
-              </button>
-
-              {/* Completed Tasks (Permanently Pinned, Counts Items) */}
-              <div className="completed-section">
-                <div className="completed-header">
-                  {completedTodos.length} Completed
+                  ))}
                 </div>
-                {completedTodos.map((todo) => (
-                  <div key={todo.id} className="todo-item completed-row">
-                    <span className="drag-handle invisible-handle">⋮⋮</span>
-                    
-                    <div className="keep-checkbox-wrapper">
-                      <input
-                        type="checkbox"
-                        className="keep-checkbox"
-                        checked={todo.completed}
-                        onChange={() => toggleTodo(todo.id)}
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      className="todo-text completed"
-                      value={todo.text}
-                      onChange={(e) => {
-                        const newText = e.target.value;
-                        setUserData((prev) => ({
-                          ...prev,
-                          todos: prev.todos.map((t) =>
-                            t.id === todo.id ? { ...t, text: newText } : t
-                          ),
-                        }));
-                      }}
-                    />
-                    <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
-                      ✕
-                    </button>
-                  </div>
-                ))}
               </div>
+            ) : (
+              /* ACTIVE LIST VIEW */
+              <div className="active-list-view">
+                <div className="active-list-header">
+                  <input
+                    type="text"
+                    className={`list-title-input ${!activeList?.title ? "untitled" : ""}`}
+                    placeholder="Untitled"
+                    value={activeList?.title || ""}
+                    onChange={(e) => handleTitleChange(activeListId, e.target.value)}
+                  />
+                  <button className="back-btn" onClick={() => setActiveListId(null)} title="Back to Lists">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                  </button>
+                </div>
 
-            </div>
+                <div className="todo-list">
+                  {/* Active Tasks (Draggable) */}
+                  {activeTodos.map((todo) => {
+                    const globalIdx = activeList!.items.findIndex((t) => t.id === todo.id);
+                    return (
+                      <div
+                        key={todo.id}
+                        className={`todo-item ${draggedIdx === globalIdx ? "dragging" : ""}`}
+                        onPointerEnter={() => handlePointerEnter(globalIdx)}
+                      >
+                        <span 
+                          className="drag-handle"
+                          onPointerDown={(e) => handlePointerDown(e, globalIdx)}
+                        >
+                          ⋮⋮
+                        </span>
+                        
+                        <div className="keep-checkbox-wrapper">
+                          <input
+                            type="checkbox"
+                            className="keep-checkbox"
+                            checked={todo.completed}
+                            onChange={() => toggleTodo(todo.id)}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          className="todo-text"
+                          placeholder="Empty task..."
+                          value={todo.text}
+                          onChange={(e) => {
+                            const newText = e.target.value;
+                            setUserData((prev) => ({
+                              ...prev,
+                              lists: prev.lists.map((l) =>
+                                l.id === activeListId
+                                  ? {
+                                      ...l,
+                                      items: l.items.map((t) =>
+                                        t.id === todo.id ? { ...t, text: newText } : t
+                                      ),
+                                    }
+                                  : l
+                              ),
+                            }));
+                          }}
+                        />
+                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {/* Add New Item Button (Placed below active tasks) */}
+                  <button className="add-item-btn" onClick={handleAddNewTask}>
+                    + Item
+                  </button>
+
+                  {/* Completed Tasks (Permanently Pinned, Counts Items) */}
+                  <div className="completed-section">
+                    <div className="completed-header">
+                      {completedTodos.length} Completed
+                    </div>
+                    {completedTodos.map((todo) => (
+                      <div key={todo.id} className="todo-item completed-row">
+                        <span className="drag-handle invisible-handle">⋮⋮</span>
+                        
+                        <div className="keep-checkbox-wrapper">
+                          <input
+                            type="checkbox"
+                            className="keep-checkbox"
+                            checked={todo.completed}
+                            onChange={() => toggleTodo(todo.id)}
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          className="todo-text completed"
+                          value={todo.text}
+                          onChange={(e) => {
+                            const newText = e.target.value;
+                            setUserData((prev) => ({
+                              ...prev,
+                              lists: prev.lists.map((l) =>
+                                l.id === activeListId
+                                  ? {
+                                      ...l,
+                                      items: l.items.map((t) =>
+                                        t.id === todo.id ? { ...t, text: newText } : t
+                                      ),
+                                    }
+                                  : l
+                              ),
+                            }));
+                          }}
+                        />
+                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

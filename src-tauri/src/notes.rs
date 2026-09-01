@@ -12,8 +12,15 @@ pub struct TodoItem {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TodoList {
+    pub id: String,
+    pub title: String,
+    pub items: Vec<TodoItem>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserData {
-    pub todos: Vec<TodoItem>,
+    pub lists: Vec<TodoList>,
     pub notes: String,
 }
 
@@ -21,7 +28,7 @@ pub struct UserData {
 impl Default for UserData {
     fn default() -> Self {
         Self {
-            todos: Vec::new(),
+            lists: Vec::new(),
             notes: String::new(),
         }
     }
