@@ -194,6 +194,11 @@ function NotepadWidget() {
   const [userData, setUserData] = useState<UserData>({ lists: [], notes: "" });
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
   const [activeListId, setActiveListId] = useState<string | null>(null);
+  
+  // --- Archive View State ---
+  const [showArchivedView, setShowArchivedView] = useState(false);
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState("");
+  
   const [isLoaded, setIsLoaded] = useState(false);
   
   // --- Pure React Drag and Drop State ---
@@ -345,7 +350,14 @@ function NotepadWidget() {
 
   // Split data for rendering
   const activeLists = userData.lists.filter((l) => !l.archived);
-  const archivedLists = userData.lists.filter((l) => l.archived);
+  
+  // Filter archived lists by the search query (treating empty titles as "Untitled")
+  const archivedLists = userData.lists
+    .filter((l) => l.archived)
+    .filter((l) => {
+      const displayTitle = l.title || "Untitled";
+      return displayTitle.toLowerCase().includes(archiveSearchQuery.toLowerCase());
+    });
 
   const activeList = userData.lists.find((l) => l.id === activeListId);
   const activeTodos = activeList?.items.filter((t) => !t.completed) || [];
@@ -365,52 +377,19 @@ function NotepadWidget() {
           />
         ) : (
           <div className="todo-container">
-            {/* DIRECTORY VIEW */}
+            {/* DIRECTORY VIEWS */}
             {!activeListId ? (
-              <div className="directory-view">
-                <button className="add-list-btn" onClick={handleAddNewList}>
-                  + New List
-                </button>
-                <div className="directory-list">
-                  
-                  {/* Active Lists */}
-                  {activeLists.map((list) => (
-                    <div
-                      key={list.id}
-                      className="directory-item"
-                      onClick={() => setActiveListId(list.id)}
-                    >
-                      <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
-                        {list.title || "Untitled"}
-                      </span>
-                      <div className="directory-actions">
-                        <button
-                          className="list-action-btn"
-                          onClick={(e) => toggleArchiveList(list.id, e)}
-                          title="Archive List"
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="21 8 21 21 3 21 3 8"></polyline>
-                            <rect x="1" y="3" width="22" height="5"></rect>
-                            <line x1="10" y1="12" x2="14" y2="12"></line>
-                          </svg>
-                        </button>
-                        <button
-                          className="list-action-btn delete"
-                          onClick={(e) => deleteList(list.id, e)}
-                          title="Delete List"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Archived Lists */}
-                  <div className="completed-section">
-                    <div className="completed-header">
-                      {archivedLists.length} Archived
-                    </div>
+              showArchivedView ? (
+                /* 3rd View: ARCHIVED LIST DIRECTORY */
+                <div className="directory-view">
+                  <input
+                    type="text"
+                    className="archive-search-input"
+                    placeholder="Search archives..."
+                    value={archiveSearchQuery}
+                    onChange={(e) => setArchiveSearchQuery(e.target.value)}
+                  />
+                  <div className="directory-list">
                     {archivedLists.map((list) => (
                       <div
                         key={list.id}
@@ -444,11 +423,65 @@ function NotepadWidget() {
                       </div>
                     ))}
                   </div>
-
+                  <button 
+                    className="archive-nav-btn" 
+                    onClick={() => {
+                      setShowArchivedView(false);
+                      setArchiveSearchQuery(""); // Clear search when leaving
+                    }}
+                  >
+                    Back
+                  </button>
                 </div>
-              </div>
+              ) : (
+                /* 1st View: MAIN LIST DIRECTORY */
+                <div className="directory-view">
+                  <button className="add-list-btn" onClick={handleAddNewList}>
+                    + New List
+                  </button>
+                  <div className="directory-list">
+                    {activeLists.map((list) => (
+                      <div
+                        key={list.id}
+                        className="directory-item"
+                        onClick={() => setActiveListId(list.id)}
+                      >
+                        <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
+                          {list.title || "Untitled"}
+                        </span>
+                        <div className="directory-actions">
+                          <button
+                            className="list-action-btn"
+                            onClick={(e) => toggleArchiveList(list.id, e)}
+                            title="Archive List"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                              <rect x="1" y="3" width="22" height="5"></rect>
+                              <line x1="10" y1="12" x2="14" y2="12"></line>
+                            </svg>
+                          </button>
+                          <button
+                            className="list-action-btn delete"
+                            onClick={(e) => deleteList(list.id, e)}
+                            title="Delete List"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button 
+                    className="archive-nav-btn" 
+                    onClick={() => setShowArchivedView(true)}
+                  >
+                    Archived Lists
+                  </button>
+                </div>
+              )
             ) : (
-              /* ACTIVE LIST VIEW */
+              /* 2nd View: ACTIVE LIST VIEW */
               <div className="active-list-view">
                 <div className="active-list-header">
                   <input

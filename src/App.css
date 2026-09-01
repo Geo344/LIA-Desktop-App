@@ -927,3 +927,38 @@ body, html, #root {
   color: rgb(56, 225, 209);
   background: rgba(255, 255, 255, 0.1);
 }
+
+/* --- Archive View Specifics --- */
+.archive-search-input {
+  all: unset;
+  font-size: 13px;
+  color: #efdae5;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
+  margin-bottom: 8px;
+}
+
+.archive-search-input::placeholder {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+}
+
+/* Navigational Button for toggling Archive/Main Directory */
+.archive-nav-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(239, 218, 229, 0.4);
+  cursor: pointer;
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1px dashed rgba(30, 113, 104, 0.4);
+  transition: color 0.2s ease;
+}
+
+.archive-nav-btn:hover {
+  color: rgba(56, 225, 209, 0.8);
+}
