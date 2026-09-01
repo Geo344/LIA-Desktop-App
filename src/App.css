@@ -561,17 +561,6 @@ body, html, #root {
   height: 100%;
   gap: 12px;
 }
-.todo-input {
-  all: unset;
-  font-size: 13px;
-  color: #efdae5;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
-}
-.todo-input::placeholder {
-  color: rgba(239, 218, 229, 0.4);
-  font-style: italic;
-}
 .todo-list {
   flex: 1;
   display: flex;
@@ -745,4 +734,28 @@ body, html, #root {
 .invisible-handle {
   visibility: hidden;
   pointer-events: none;
+}
+
+/* Add Item Button */
+.add-item-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  /* Margins correctly offset the button past the grip-handle and checkbox to perfectly align with the text */
+  margin: 6px 0 0px 28px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(239, 218, 229, 0.5);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.add-item-btn:hover {
+  color: rgba(56, 225, 209, 0.9);
+}
+
+/* Empty Task Placeholder Styling */
+.todo-text::placeholder {
+  color: rgba(239, 218, 229, 0.3);
+  font-style: italic;
 }

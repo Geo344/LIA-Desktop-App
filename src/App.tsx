@@ -183,11 +183,9 @@ function MusicWidget() {
   );
 }
 
-// --- Isolated Notepad Widget Component ---
 function NotepadWidget() {
   const [userData, setUserData] = useState<UserData>({ todos: [], notes: "" });
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
-  const [newTask, setNewTask] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
   
   // --- Pure React Drag and Drop State ---
@@ -204,7 +202,7 @@ function NotepadWidget() {
       .catch(console.error);
   }, []);
 
-  // 2. Debounced auto-save to prevent disk thrashing while typing
+  // 2. Debounced auto-save
   useEffect(() => {
     if (!isLoaded) return;
     const timer = setTimeout(() => {
@@ -229,16 +227,13 @@ function NotepadWidget() {
   };
 
   // --- To-Do Handlers ---
-  const handleAddTask = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && newTask.trim() !== "") {
-      const newTodo: TodoItem = {
-        id: crypto.randomUUID(),
-        text: newTask.trim(),
-        completed: false,
-      };
-      setUserData((prev) => ({ ...prev, todos: [...prev.todos, newTodo] }));
-      setNewTask("");
-    }
+  const handleAddNewTask = () => {
+    const newTodo: TodoItem = {
+      id: crypto.randomUUID(),
+      text: "",
+      completed: false,
+    };
+    setUserData((prev) => ({ ...prev, todos: [...prev.todos, newTodo] }));
   };
 
   const toggleTodo = (id: string) => {
@@ -299,14 +294,6 @@ function NotepadWidget() {
           />
         ) : (
           <div className="todo-container">
-            <input
-              type="text"
-              className="todo-input"
-              placeholder="+ Add a task (Press Enter)"
-              value={newTask}
-              onChange={(e) => setNewTask(e.target.value)}
-              onKeyDown={handleAddTask}
-            />
             <div className="todo-list">
               
               {/* Active Tasks (Draggable) */}
@@ -336,6 +323,7 @@ function NotepadWidget() {
                     <input
                       type="text"
                       className="todo-text"
+                      placeholder="Empty task..."
                       value={todo.text}
                       onChange={(e) => {
                         const newText = e.target.value;
@@ -353,6 +341,11 @@ function NotepadWidget() {
                   </div>
                 );
               })}
+
+              {/* Add New Item Button (Placed below active tasks) */}
+              <button className="add-item-btn" onClick={handleAddNewTask}>
+                + Item
+              </button>
 
               {/* Completed Tasks (Permanently Pinned, Counts Items) */}
               <div className="completed-section">
