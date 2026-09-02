@@ -719,35 +719,6 @@ body, html, #root {
   height: 20px;
 }
 
-/* --- Hide Widget Button --- */
-.hide-widget-btn {
-  all: unset;
-  position: absolute;
-  /* Positions it perfectly outside the tab bar, just to the left */
-  left: -28px; 
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: rgba(239, 218, 229, 0.4);
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  z-index: 100;
-}
-
-.hide-widget-btn:hover {
-  color: rgb(56, 225, 209);
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.hide-widget-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
 /* --- Completed Section Styling --- */
 .completed-section {
   margin-top: 8px;

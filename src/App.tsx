@@ -219,6 +219,10 @@ function NotepadWidget() {
     } else if (activeTab !== targetTab) {
       invoke("play_ping", { soundType: "notepad_switch" }).catch(console.error);
       setActiveTab(targetTab);
+    } else {
+      // Hides the widget when clicking the currently active tab
+      playClick();
+      setIsHidden(true);
     }
   };
 
@@ -612,17 +616,6 @@ function NotepadWidget() {
 
       {/* Right-Side Tab Navigation */}
       <div className="notepad-tabs">
-        {/* Hide Widget Button */}
-        <button 
-          className="hide-widget-btn" 
-          onClick={() => { playClick(); setIsHidden(true); }}
-          title="Hide Notepad"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-
         <button
           className={`tab-button ${activeTab === "notes" ? "active" : ""}`}
           onClick={() => handleTabClick("notes")}
