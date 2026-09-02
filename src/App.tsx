@@ -209,6 +209,8 @@ function NotepadWidget() {
   // --- Audio Helpers ---
   const playClick = () => invoke("play_ping", { soundType: "notepad_click" }).catch(console.error);
 
+  const playClick2 = () => invoke("play_ping", { soundType: "notepad_check" }).catch(console.error);
+
   const handleTabClick = (targetTab: "notes" | "todos") => {
     if (isHidden) {
       invoke("play_ping", { soundType: "notepad_open" }).catch(console.error);
@@ -295,7 +297,7 @@ function NotepadWidget() {
   // --- To-Do Handlers ---
   const handleAddNewTask = () => {
     if (!activeListId) return;
-    playClick();
+    playClick2();
     const newTodo: TodoItem = {
       id: crypto.randomUUID(),
       text: "",
@@ -310,7 +312,7 @@ function NotepadWidget() {
   };
 
   const toggleTodo = (todoId: string) => {
-    invoke("play_ping", { soundType: "notepad_check" }).catch(console.error);
+    playClick2();
     setUserData((prev) => ({
       ...prev,
       lists: prev.lists.map((l) =>
@@ -412,7 +414,7 @@ function NotepadWidget() {
                       <div
                         key={list.id}
                         className="directory-item archived-row"
-                        onClick={() => { playClick(); setActiveListId(list.id); }}
+                        onClick={() => { playClick2(); setActiveListId(list.id); }}
                       >
                         <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
                           {list.title || "Untitled"}
@@ -455,7 +457,7 @@ function NotepadWidget() {
               ) : (
                 /* 1st View: MAIN LIST DIRECTORY */
                 <div className="directory-view">
-                  <button className="add-list-btn" onClick={() => { playClick(); handleAddNewList(); }}>
+                  <button className="add-list-btn" onClick={() => { playClick2(); handleAddNewList(); }}>
                     + New List
                   </button>
                   <div className="directory-list">
@@ -463,7 +465,7 @@ function NotepadWidget() {
                       <div
                         key={list.id}
                         className="directory-item"
-                        onClick={() => { playClick(); setActiveListId(list.id); }}
+                        onClick={() => { playClick2(); setActiveListId(list.id); }}
                       >
                         <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
                           {list.title || "Untitled"}
