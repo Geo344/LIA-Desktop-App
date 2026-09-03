@@ -131,25 +131,66 @@ function ScheduleWidget() {
 // --- Isolated Music Widget Component ---
 function MusicWidget() {
   const [media, setMedia] = useState<MediaState | null>(null);
+  
+  // Tracks the exact millisecond a button was last clicked
+  const lastActionTime = useRef<number>(0);
+
+  const fetchMediaState = async () => {
+    try {
+      const state = await invoke<MediaState>("get_media_state");
+      
+      // Only apply the fetched state if we haven't clicked a button in the last 800ms.
+      // This prevents Windows' delayed old state from overwriting our instant UI updates.
+      if (Date.now() - lastActionTime.current > 800) {
+        setMedia(state);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
-    // Restored to 1000ms since we no longer need fast CSS interpolation
-    const interval = setInterval(async () => {
-      try {
-        const state = await invoke<MediaState>("get_media_state");
-        setMedia(state);
-      } catch (e) {
-        console.error(e);
-      }
-    }, 1000);
+    fetchMediaState();
+    const interval = setInterval(fetchMediaState, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // --- Highly Responsive Handlers ---
+  const handlePlayPause = async () => {
+    invoke("play_ping", { soundType: "music" }).catch(console.error);
+    
+    // Shield the state from incoming background polls
+    lastActionTime.current = Date.now();
+    
+    // 1. Optimistic Update: Instantly flip the UI state so it feels snappy
+    if (media) {
+      setMedia({ ...media, is_playing: !media.is_playing });
+    }
+    
+    // 2. Send the actual command to Windows
+    await invoke('media_play_pause');
+  };
+
+  const handleSkip = async (direction: 'media_next' | 'media_prev') => {
+    invoke("play_ping", { soundType: "music" }).catch(console.error);
+    
+    // Shield the state from incoming background polls
+    lastActionTime.current = Date.now();
+    
+    await invoke(direction);
+    
+    // Instant Fetch: Wait 150ms for Windows SMTC to register the new track, 
+    // drop the shield, and force an update
+    setTimeout(() => {
+      lastActionTime.current = 0;
+      fetchMediaState();
+    }, 150);
+  };
 
   if (!media || !media.is_active || !media.title) return null;
 
   return (
     <div className="music-widget">
-      {/* Conditionally render the album cover if Rust sends the Base64 string */}
       {media.thumbnail_base64 && (
         <img 
           src={`data:image/jpeg;base64,${media.thumbnail_base64}`} 
@@ -164,26 +205,34 @@ function MusicWidget() {
       </div>
 
       <div className="music-controls">
-        <button 
-          onPointerDown={() => invoke("play_ping", { soundType: "music" }).catch(console.error)} 
-          onClick={() => invoke('media_prev')}
-        >
-          ⏮
+        <button onPointerDown={() => handleSkip('media_prev')}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+            <polygon points="19 20 9 12 19 4 19 20"></polygon>
+            <rect x="5" y="4" width="2" height="16"></rect>
+          </svg>
         </button>
 
         <button 
           className="play-pause-btn" 
-          onPointerDown={() => invoke("play_ping", { soundType: "music" }).catch(console.error)} 
-          onClick={() => invoke('media_play_pause')}
+          onPointerDown={handlePlayPause}
         >
-          {media.is_playing ? "⏸" : "▶"}
+          {media.is_playing ? (
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+              <polygon points="6 3 20 12 6 21 6 3"></polygon>
+            </svg>
+          )}
         </button>
         
-        <button 
-          onPointerDown={() => invoke("play_ping", { soundType: "music" }).catch(console.error)} 
-          onClick={() => invoke('media_next')}
-        >
-          ⏭
+        <button onPointerDown={() => handleSkip('media_next')}>
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+            <polygon points="5 4 15 12 5 20 5 4"></polygon>
+            <rect x="17" y="4" width="2" height="16"></rect>
+          </svg>
         </button>
       </div>
     </div>

@@ -282,29 +282,44 @@ body, html, #root {
 }
 
 .music-controls {
-  grid-area: controls;
   display: flex;
-  align-items: center;
-  justify-content: flex-start; /* Left aligns the buttons with the text */
-  gap: 20px;
+  align-items: center; /* Locks all three buttons to the exact same vertical center line */
+  gap: 12px; /* Adjust this to your preferred spacing */
 }
 
 .music-controls button {
   background: none;
   border: none;
   color: #f4f8fc;
-  font-size: 18px;
   cursor: pointer;
-  transition: transform 0.2s ease, text-shadow 0.2s ease;
+  
+  /* Centers the SVG inside the button boundary */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 
 .music-controls button:hover {
   transform: scale(1.1);
-  text-shadow: 0 0 8px rgba(56, 225, 209, 0.6);
+  /* Switched from text-shadow to drop-shadow so the glowing effect applies to the SVG shapes */
+  filter: drop-shadow(0 0 6px rgba(56, 225, 209, 0.6));
 }
 
-.play-pause-btn {
-  font-size: 24px !important;
+.music-controls button.play-pause-btn {
+  width: 28px; 
+  height: 28px;
+  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.music-controls button.play-pause-btn:active {
+  transform: scale(0.65);
 }
 
 /* --- Schedule Widget --- */
