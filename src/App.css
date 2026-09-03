@@ -178,7 +178,6 @@ body, html, #root {
 }
 
 
-/* --- Music Player Widget --- */
 .music-widget {
   position: absolute;
   top: 0; 
@@ -189,20 +188,14 @@ body, html, #root {
     "cover info"
     "cover controls";
   
-  /* Explicitly lock the first column to the exact size of your cover */
   grid-template-columns: 96px 1fr;
-  
   column-gap: 16px;
   row-gap: 4px;
   align-items: center;
 
-  /* Tightly hugs the album cover on the top, bottom, and left */
   padding: 8px 24px 8px 8px;
-  
-  /* Lock the total width so the left edge never shifts when track names change */
   width: 340px; 
   
-  /* Border and backdrop for the music widget */
   background: rgba(15, 23, 42, 1);
   border: 1px solid rgb(30, 113, 104);
   border-top: none;
@@ -215,6 +208,14 @@ body, html, #root {
   color: #efdae5;
   font-family: "Avenir Next", Avenir, sans-serif;
   z-index: 100;
+  
+  /* Adds smooth easing for the vertical slide animation */
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Yanks the widget completely off the top of the screen */
+.music-widget.sliding-up {
+  transform: translateY(-120%);
 }
 
 /* 1. Top-Left Inverted Curve */

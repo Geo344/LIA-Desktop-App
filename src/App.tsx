@@ -131,6 +131,7 @@ function ScheduleWidget() {
 // --- Isolated Music Widget Component ---
 function MusicWidget() {
   const [media, setMedia] = useState<MediaState | null>(null);
+  const [isSliding, setIsSliding] = useState(false);
   
   // Tracks the exact millisecond a button was last clicked
   const lastActionTime = useRef<number>(0);
@@ -140,7 +141,6 @@ function MusicWidget() {
       const state = await invoke<MediaState>("get_media_state");
       
       // Only apply the fetched state if we haven't clicked a button in the last 800ms.
-      // This prevents Windows' delayed old state from overwriting our instant UI updates.
       if (Date.now() - lastActionTime.current > 800) {
         setMedia(state);
       }
@@ -158,39 +158,40 @@ function MusicWidget() {
   // --- Highly Responsive Handlers ---
   const handlePlayPause = async () => {
     invoke("play_ping", { soundType: "music" }).catch(console.error);
-    
-    // Shield the state from incoming background polls
     lastActionTime.current = Date.now();
     
-    // 1. Optimistic Update: Instantly flip the UI state so it feels snappy
     if (media) {
       setMedia({ ...media, is_playing: !media.is_playing });
     }
     
-    // 2. Send the actual command to Windows
     await invoke('media_play_pause');
   };
 
   const handleSkip = async (direction: 'media_next' | 'media_prev') => {
-    invoke("play_ping", { soundType: "music" }).catch(console.error);
+    if (isSliding) return; // Prevent spam-clicking while animating
     
-    // Shield the state from incoming background polls
+    invoke("play_ping", { soundType: "music" }).catch(console.error);
     lastActionTime.current = Date.now();
     
+    // 1. Trigger the slide-up animation instantly
+    setIsSliding(true);
+    
+    // 2. Send the command to Windows
     await invoke(direction);
     
-    // Instant Fetch: Wait 150ms for Windows SMTC to register the new track, 
-    // drop the shield, and force an update
-    setTimeout(() => {
+    // 3. Wait 300ms for the upward animation to finish and SMTC to fetch the new track,
+    // then fetch the fresh data and slide it back down.
+    setTimeout(async () => {
       lastActionTime.current = 0;
-      fetchMediaState();
-    }, 150);
+      await fetchMediaState();
+      setIsSliding(false);
+    }, 300);
   };
 
   if (!media || !media.is_active || !media.title) return null;
 
   return (
-    <div className="music-widget">
+    <div className={`music-widget ${isSliding ? "sliding-up" : ""}`}>
       {media.thumbnail_base64 && (
         <img 
           src={`data:image/jpeg;base64,${media.thumbnail_base64}`} 
