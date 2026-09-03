@@ -6,4 +6,10 @@ My own personally designed wallpaper desktop app with an integrated assistant (I
 - Music player widget was developed for Youtube music playlists, but it can display the details of other Youtube videos and other things
 - Added sound effects are all taken from Sword Art Online Aincrad Arc. 
 
-# Tauri + React + Typescript Architecture
+# Tauri Architecture
+Backend: Rust
+Frontend: Typescript + React
+
+# Local Deployment
+npm run tauri dev - local development command
+npm run tauri build - build .exe application file

@@ -239,6 +239,7 @@ function MusicWidget() {
   );
 }
 
+// --- Notepad Widget Component ---
 function NotepadWidget() {
   const [userData, setUserData] = useState<UserData>({ lists: [], notes: "" });
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
@@ -254,6 +255,7 @@ function NotepadWidget() {
   // --- Pure React Drag and Drop State ---
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const dragItemRef = useRef<number | null>(null);
+  const scrollListRef = useRef<HTMLDivElement>(null);
 
   // --- Audio Helpers ---
   const playClick = () => invoke("play_ping", { soundType: "notepad_click" }).catch(console.error);
@@ -303,6 +305,45 @@ function NotepadWidget() {
     window.addEventListener("pointerup", handleGlobalUp);
     return () => window.removeEventListener("pointerup", handleGlobalUp);
   }, []);
+
+  // --- Auto-Scroll During Drag ---
+  useEffect(() => {
+    if (draggedIdx === null) return;
+
+    let animationFrameId: number;
+    let currentScrollSpeed = 0;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!scrollListRef.current) return;
+      
+      const rect = scrollListRef.current.getBoundingClientRect();
+      const threshold = 10; // Pixels from the edge that trigger scrolling
+      
+      // Calculate scroll direction and speed
+      if (e.clientY < rect.top + threshold) {
+        currentScrollSpeed = -4; // Scroll up
+      } else if (e.clientY > rect.bottom - threshold) {
+        currentScrollSpeed = 4; // Scroll down
+      } else {
+        currentScrollSpeed = 0; // Stop scrolling
+      }
+    };
+
+    const scrollLoop = () => {
+      if (currentScrollSpeed !== 0 && scrollListRef.current) {
+        scrollListRef.current.scrollTop += currentScrollSpeed;
+      }
+      animationFrameId = requestAnimationFrame(scrollLoop);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    animationFrameId = requestAnimationFrame(scrollLoop);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [draggedIdx]);
 
   // --- Note Handlers ---
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -572,7 +613,7 @@ function NotepadWidget() {
                   </button>
                 </div>
 
-                <div className="todo-list">
+                <div className="todo-list" ref={scrollListRef}>
                   {/* Active Tasks (Draggable) */}
                   {activeTodos.map((todo) => {
                     const globalIdx = activeList!.items.findIndex((t) => t.id === todo.id);
