@@ -131,19 +131,17 @@ function ScheduleWidget() {
 // --- Isolated Music Widget Component ---
 function MusicWidget() {
   const [media, setMedia] = useState<MediaState | null>(null);
-  const [isSliding, setIsSliding] = useState(false);
   
-  // Tracks the exact millisecond a button was last clicked
-  const lastActionTime = useRef<number>(0);
+  // Creates a timestamp shield to intentionally ignore outdated SMTC data during track transitions
+  const ignorePollUntil = useRef<number>(0);
 
   const fetchMediaState = async () => {
+    // If we recently clicked a button, ignore the background poll so we don't fetch the old track
+    if (Date.now() < ignorePollUntil.current) return;
+
     try {
       const state = await invoke<MediaState>("get_media_state");
-      
-      // Only apply the fetched state if we haven't clicked a button in the last 800ms.
-      if (Date.now() - lastActionTime.current > 800) {
-        setMedia(state);
-      }
+      setMedia(state);
     } catch (e) {
       console.error(e);
     }
@@ -151,47 +149,48 @@ function MusicWidget() {
 
   useEffect(() => {
     fetchMediaState();
-    const interval = setInterval(fetchMediaState, 1000);
+    // A slightly faster 500ms base poll ensures it catches the new track quickly once the blind spot ends
+    const interval = setInterval(fetchMediaState, 500);
     return () => clearInterval(interval);
   }, []);
 
   // --- Highly Responsive Handlers ---
   const handlePlayPause = async () => {
     invoke("play_ping", { soundType: "music" }).catch(console.error);
-    lastActionTime.current = Date.now();
     
+    // Instantly flip the UI and shield the state for 500ms
     if (media) {
       setMedia({ ...media, is_playing: !media.is_playing });
     }
+    ignorePollUntil.current = Date.now() + 500;
     
     await invoke('media_play_pause');
   };
 
   const handleSkip = async (direction: 'media_next' | 'media_prev') => {
-    if (isSliding) return; // Prevent spam-clicking while animating
-    
     invoke("play_ping", { soundType: "music" }).catch(console.error);
-    lastActionTime.current = Date.now();
     
-    // 1. Trigger the slide-up animation instantly
-    setIsSliding(true);
+    // 1. Instantly trigger the slide-up animation by artificially marking the current state as inactive
+    if (media) {
+      setMedia({ ...media, is_active: false });
+    }
     
-    // 2. Send the command to Windows
+    // 2. Create an 800ms blind spot so Windows has plenty of time to clear the old track
+    ignorePollUntil.current = Date.now() + 800;
+    
+    // 3. Send the fire-and-forget command to Windows
     await invoke(direction);
-    
-    // 3. Wait 300ms for the upward animation to finish and SMTC to fetch the new track,
-    // then fetch the fresh data and slide it back down.
-    setTimeout(async () => {
-      lastActionTime.current = 0;
-      await fetchMediaState();
-      setIsSliding(false);
-    }, 300);
   };
 
-  if (!media || !media.is_active || !media.title) return null;
+  // Do not render anything at all on initial boot before Rust returns the first payload
+  if (!media) return null;
+
+  // Bind the sliding animation directly to the natural SMTC active state
+  const hideWidget = !media.is_active || !media.title;
 
   return (
-    <div className={`music-widget ${isSliding ? "sliding-up" : ""}`}>
+    <div className={`music-widget ${hideWidget ? "sliding-up" : ""}`}>
+      {/* The old data remains in the DOM while inactive so the slide-up animation looks perfectly smooth */}
       {media.thumbnail_base64 && (
         <img 
           src={`data:image/jpeg;base64,${media.thumbnail_base64}`} 
