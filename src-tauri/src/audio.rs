@@ -1,5 +1,8 @@
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
+use rodio::{cpal::traits::{DeviceTrait, HostTrait}, Decoder, OutputStream, Source};
 use std::io::Cursor;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 use tauri::State;
 
 // Embed sound effects directly into the compiled Rust binary
@@ -10,34 +13,61 @@ static NOTEPAD_SWITCH_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effe
 static NOTEPAD_CHECK_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/Notepad-CheckItem.wav");
 static NOTEPAD_CLICK_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/Notepad-Click.wav");
 
-// Thread-safe state holding only the stream handle
-pub struct AppAudioState {
-    pub stream_handle: OutputStreamHandle,
+pub struct AudioEngine {
+    tx: mpsc::Sender<String>,
 }
 
-impl AppAudioState {
+impl AudioEngine {
     pub fn new() -> Self {
-        let (stream, stream_handle) = OutputStream::try_default().expect("Failed to open audio device");
-        // Keep the hardware output stream open for the entire process lifetime
-        std::mem::forget(stream);
-        Self { stream_handle }
+        let (tx, rx) = mpsc::channel::<String>();
+
+        thread::spawn(move || {
+            let host = rodio::cpal::default_host();
+            let mut current_device = host.default_output_device().and_then(|d| d.name().ok());
+            let (mut _stream, mut stream_handle) = OutputStream::try_default().expect("Failed to initialize audio");
+
+            loop {
+                // Wait for a play request, waking up every 1 second while idle to check hardware
+                match rx.recv_timeout(Duration::from_millis(1000)) {
+                    Ok(sound_type) => {
+                        let bytes = match sound_type.as_str() {
+                            "music" => MUSIC_BYTES,
+                            "notepad_open" => NOTEPAD_OPEN_BYTES,
+                            "notepad_switch" => NOTEPAD_SWITCH_BYTES,
+                            "notepad_check" => NOTEPAD_CHECK_BYTES,
+                            "notepad_click" => NOTEPAD_CLICK_BYTES,
+                            _ => SHORTCUT_BYTES, 
+                        };
+
+                        if let Ok(decoder) = Decoder::new(Cursor::new(bytes)) {
+                            let _ = stream_handle.play_raw(decoder.convert_samples());
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // Idle timeout reached. Check Windows for a new default device
+                        if let Some(device) = host.default_output_device() {
+                            if let Ok(name) = device.name() {
+                                if Some(name.clone()) != current_device {
+                                    // Device hot-swap detected! Rebuild the stream in the background
+                                    if let Ok((new_stream, new_handle)) = OutputStream::try_default() {
+                                        _stream = new_stream;
+                                        stream_handle = new_handle;
+                                        current_device = Some(name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break, // App is closing
+                }
+            }
+        });
+
+        Self { tx }
     }
 }
 
-// Play sound effect based on the requested type
 #[tauri::command]
-pub fn play_ping(audio: State<'_, AppAudioState>, sound_type: &str) {
-    let bytes = match sound_type {
-        "music" => MUSIC_BYTES,
-        "notepad_open" => NOTEPAD_OPEN_BYTES,
-        "notepad_switch" => NOTEPAD_SWITCH_BYTES,
-        "notepad_check" => NOTEPAD_CHECK_BYTES,
-        "notepad_click" => NOTEPAD_CLICK_BYTES,
-        _ => SHORTCUT_BYTES, // Default to the shortcut click
-    };
-
-    let cursor = Cursor::new(bytes);
-    if let Ok(source) = Decoder::new(cursor) {
-        let _ = audio.stream_handle.play_raw(source.convert_samples());
-    }
+pub fn play_ping(audio: State<'_, AudioEngine>, sound_type: String) {
+    let _ = audio.tx.send(sound_type);
 }
