@@ -1,0 +1,502 @@
+/* --- Dual Notes/To-Do Widget --- */
+.notepad-widget {
+  position: absolute;
+  top: 360px; 
+  left: 0;
+  width: 320px;
+  height: 280px;
+
+  display: flex;
+  flex-direction: row; 
+
+  background: rgba(15, 23, 42, 1);
+  border: 1px solid rgb(30, 113, 104);
+  border-left: none;
+  backdrop-filter: blur(12px);
+  
+  border-radius: 0 16px 16px 0; 
+  box-shadow: 4px 8px 24px rgba(0, 0, 0, 0.45);
+
+  color: #efdae5;
+  font-family: "Avenir Next", Avenir, system-ui, sans-serif;
+  z-index: 90;
+  
+  /* Smooth sliding out animation */
+  transition: transform 1.1s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* 1. Top-Left Inverted Curve */
+.notepad-widget::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 0 V 12 H 12 A 12 12 0 0 1 0 0 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 12 12 A 12 12 0 0 1 0 0' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* 2. Bottom-Left Inverted Curve */
+.notepad-widget::after {
+  content: "";
+  position: absolute;
+  bottom: -12px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 12 V 0 H 12 A 12 12 0 0 0 0 12 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 12 0 A 12 12 0 0 0 0 12' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Slides the widget left, leaving exactly the 48px tabs visible */
+.notepad-widget.hidden {
+  transform: translateX(calc(-100% + 48px));
+
+  /* Faster transition used when hiding (sliding in) */
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Content Area */
+.notepad-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 8px 16px 20px;
+  overflow: hidden;
+}
+
+/* Notes Textarea */
+.notes-textarea {
+  all: unset;
+  flex: 1;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #efdae5;
+  resize: none;
+  overflow-y: auto;
+}
+.notes-textarea::placeholder {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+}
+.notes-textarea::-webkit-scrollbar {
+  width: 4px;
+}
+.notes-textarea::-webkit-scrollbar-thumb {
+  background: rgba(30, 113, 104, 0.6);
+  border-radius: 4px;
+}
+
+/* Google Keep-Style To-Do List */
+.todo-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 12px;
+}
+.todo-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.todo-list::-webkit-scrollbar {
+  width: 4px;
+}
+.todo-list::-webkit-scrollbar-thumb {
+  background: rgba(30, 113, 104, 0.6);
+  border-radius: 4px;
+}
+
+/* Drag and Drop Pointer Styling */
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  border-radius: 4px;
+}
+
+.todo-item.dragging {
+  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.drag-handle {
+  font-size: 14px;
+  color: rgba(239, 218, 229, 0.3);
+  letter-spacing: -2px;
+  margin-right: 2px;
+  user-select: none;
+  cursor: grab;
+  touch-action: none; /* Prevents Windows from scrolling while dragging */
+  transition: color 0.2s ease;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.todo-item:hover .drag-handle {
+  color: rgba(239, 218, 229, 0.8);
+}
+
+/* Google Keep Square Checkbox */
+.keep-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.keep-checkbox {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(239, 218, 229, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+.keep-checkbox:checked {
+  background-color: rgba(239, 218, 229, 0.2);
+  border-color: rgba(239, 218, 229, 0.8);
+}
+.keep-checkbox:checked::after {
+  content: "✔";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -55%);
+  font-size: 11px;
+  color: #efdae5;
+}
+
+.todo-text {
+  all: unset;
+  flex: 1;
+  font-size: 13px;
+  color: #efdae5;
+  transition: color 0.2s ease;
+}
+.todo-text.completed {
+  text-decoration: line-through;
+  color: rgba(239, 218, 229, 0.4);
+}
+
+.todo-delete {
+  all: unset;
+  cursor: pointer;
+  color: rgba(255, 77, 79, 0.6);
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+.todo-item:hover .todo-delete {
+  opacity: 1;
+}
+.todo-delete:hover {
+  color: rgba(255, 77, 79, 1);
+}
+
+/* Right-Side Tab Bar */
+.notepad-tabs {
+  position: relative; /* Essential for positioning the hide button */
+  display: flex;
+  flex-direction: column;
+  width: 48px;
+  border-left: 1px solid rgba(30, 113, 104, 0.4);
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 0 15px 15px 0;
+}
+
+.tab-button {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 50%;
+  cursor: pointer;
+  color: rgba(239, 218, 229, 0.4);
+  transition: all 0.2s ease;
+}
+.tab-button:first-child {
+  border-radius: 0 15px 0 0;
+}
+.tab-button:last-child {
+  border-radius: 0 0 15px 0;
+}
+.tab-button:hover {
+  color: rgba(56, 225, 209, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+}
+.tab-button.active {
+  color: rgb(56, 225, 209);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 3px 0 0 rgb(56, 225, 209);
+}
+.tab-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- Completed Section Styling --- */
+.completed-section {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.completed-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(239, 218, 229, 0.4);
+  padding: 8px 0 6px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px dashed rgba(30, 113, 104, 0.4);
+  user-select: none;
+}
+
+.completed-row {
+  opacity: 0.7;
+}
+
+.invisible-handle {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Add Item Button */
+.add-item-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  /* Margins correctly offset the button past the grip-handle and checkbox to perfectly align with the text */
+  margin: 6px 0 0px 28px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(239, 218, 229, 0.5);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.add-item-btn:hover {
+  color: rgba(56, 225, 209, 0.9);
+}
+
+/* Empty Task Placeholder Styling */
+.todo-text::placeholder {
+  color: rgba(239, 218, 229, 0.3);
+  font-style: italic;
+}
+
+/* --- Multi-List Directory View --- */
+.directory-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.add-list-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(56, 225, 209, 0.8);
+  cursor: pointer;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
+  margin-bottom: 8px;
+  transition: color 0.2s ease;
+}
+
+.add-list-btn:hover {
+  color: rgba(56, 225, 209, 1);
+}
+
+.directory-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.directory-list::-webkit-scrollbar {
+  width: 4px;
+}
+.directory-list::-webkit-scrollbar-thumb {
+  background: rgba(30, 113, 104, 0.6);
+  border-radius: 4px;
+}
+
+.directory-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.directory-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* --- Directory Action Buttons --- */
+.directory-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.directory-item:hover .directory-actions {
+  opacity: 1;
+}
+
+.list-action-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(239, 218, 229, 0.4);
+  transition: color 0.2s ease;
+}
+
+.list-action-btn:hover {
+  color: rgb(56, 225, 209);
+}
+
+.list-action-btn.delete {
+  font-size: 14px;
+  color: rgba(255, 77, 79, 0.6);
+}
+
+.list-action-btn.delete:hover {
+  color: rgba(255, 77, 79, 1);
+}
+
+.list-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Fades the text slightly to indicate it is archived */
+.directory-item.archived-row .directory-title {
+  opacity: 0.6;
+}
+
+.directory-title {
+  font-size: 13px;
+  color: #efdae5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.directory-title.untitled {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+}
+
+/* --- Active List Header (Title & Back Button) --- */
+.active-list-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.active-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
+}
+
+.list-title-input {
+  all: unset;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #efdae5;
+}
+
+.list-title-input::placeholder {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.back-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(239, 218, 229, 0.6);
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.back-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.back-btn:hover {
+  color: rgb(56, 225, 209);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Archive View Specifics --- */
+.archive-search-input {
+  all: unset;
+  font-size: 13px;
+  color: #efdae5;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(30, 113, 104, 0.4);
+  margin-bottom: 8px;
+}
+
+.archive-search-input::placeholder {
+  color: rgba(239, 218, 229, 0.4);
+  font-style: italic;
+}
+
+/* Navigational Button for toggling Archive/Main Directory */
+.archive-nav-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(239, 218, 229, 0.4);
+  cursor: pointer;
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1px dashed rgba(30, 113, 104, 0.4);
+  transition: color 0.2s ease;
+}
+
+.archive-nav-btn:hover {
+  color: rgba(56, 225, 209, 0.8);
+}

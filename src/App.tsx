@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import "./css-styling/shortcuts.css";
+import "./css-styling/music_widget.css";
+import "./css-styling/notepad_widget.css";
+import "./css-styling/schedule_widget.css";
 import wallpaperImg from "./assets/Vivy_Wallpaper.png";
 
 // Customized SVG Icons

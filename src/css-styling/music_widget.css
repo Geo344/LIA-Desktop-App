@@ -1,0 +1,146 @@
+/* Music widget */
+
+.music-widget {
+  position: absolute;
+  top: 0; 
+  right: 0; 
+  
+  display: grid;
+  grid-template-areas:
+    "cover info"
+    "cover controls";
+  
+  grid-template-columns: 96px 1fr;
+  column-gap: 16px;
+  row-gap: 4px;
+  align-items: center;
+
+  padding: 8px 24px 8px 8px;
+  width: 340px; 
+  
+  background: rgba(15, 23, 42, 1);
+  border: 1px solid rgb(30, 113, 104);
+  border-top: none;
+  border-right: none;
+  backdrop-filter: blur(12px);
+  
+  border-radius: 0 0 0 16px; 
+  filter: drop-shadow(-4px 4px 12px rgba(0, 0, 0, 0.4));
+  
+  color: #efdae5;
+  font-family: "Avenir Next", Avenir, sans-serif;
+  z-index: 100;
+  
+  /* Adds smooth easing for the vertical slide animation */
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Yanks the widget completely off the top of the screen */
+.music-widget.sliding-up {
+  transform: translateY(-120%);
+}
+
+/* 1. Top-Left Inverted Curve */
+.music-widget::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -12px;
+  width: 12px;
+  height: 12px;
+  
+  /* Corrected Concave Geometry: Solid fills top-right, scooping outward to the bottom-left */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 0 A 12 12 0 0 1 12 12 V 0 H 0 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 0 0 A 12 12 0 0 1 12 12' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* 2. Bottom-Right Inverted Curve */
+.music-widget::after {
+  content: "";
+  position: absolute;
+  bottom: -12px;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  
+  /* Exact same concave geometry perfectly connects the bottom border to the screen edge */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M 0 0 A 12 12 0 0 1 12 12 V 0 H 0 Z' fill='rgb(15,23,42)'/%3E%3Cpath d='M 0 0 A 12 12 0 0 1 12 12' fill='none' stroke='rgb(30, 113, 104)' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+.album-cover {
+  grid-area: cover;
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.music-info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Left aligns the text block */
+  text-align: left;
+  width: 100%;
+}
+
+.music-title {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  max-width: 220px; /* Prevents long song titles from blowing out the screen */
+}
+
+.music-artist {
+  font-size: 12px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.music-controls {
+  display: flex;
+  align-items: center; /* Locks all three buttons to the exact same vertical center line */
+  gap: 12px; /* Adjust this to your preferred spacing */
+}
+
+.music-controls button {
+  background: none;
+  border: none;
+  color: #f4f8fc;
+  cursor: pointer;
+  
+  /* Centers the SVG inside the button boundary */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.music-controls button:hover {
+  transform: scale(1.1);
+  /* Switched from text-shadow to drop-shadow so the glowing effect applies to the SVG shapes */
+  filter: drop-shadow(0 0 6px rgba(56, 225, 209, 0.6));
+}
+
+.music-controls button.play-pause-btn {
+  width: 28px; 
+  height: 28px;
+  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+  transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.music-controls button.play-pause-btn:active {
+  transform: scale(0.65);
+}
