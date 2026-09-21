@@ -501,3 +501,42 @@
 .archive-nav-btn:hover {
   color: rgba(56, 225, 209, 0.8);
 }
+
+/* --- Task Counters (Boxed Design) --- */
+.directory-info {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  flex: 1;
+}
+
+.list-counts {
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px; /* Space between the two boxes */
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.count-pending {
+  color: rgba(251, 146, 60, 0.9); /* Vibrant Orange */
+  border: 1px solid rgba(251, 146, 60, 0.5);
+  background: transparent;
+  border-radius: 6px;
+  padding: 2px 6px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.count-completed {
+  color: rgba(168, 85, 247, 0.8); /* Muted Purple */
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  background: transparent;
+  border-radius: 6px;
+  padding: 2px 6px;
+  min-width: 24px;
+  text-align: center;
+}

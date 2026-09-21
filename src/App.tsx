@@ -516,9 +516,15 @@ function NotepadWidget() {
                         className="directory-item archived-row"
                         onClick={() => { playClick3(); setActiveListId(list.id); }}
                       >
-                        <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
-                          {list.title || "Untitled"}
-                        </span>
+                        <div className="directory-info">
+                          <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
+                            {list.title || "Untitled"}
+                          </span>
+                          <div className="list-counts">
+                            <span className="count-pending" title="Remaining">{list.items.filter(t => !t.completed).length}</span>
+                            <span className="count-completed" title="Completed">{list.items.filter(t => t.completed).length}</span>
+                          </div>
+                        </div>
                         <div className="directory-actions">
                           <button
                             className="list-action-btn"
@@ -567,9 +573,15 @@ function NotepadWidget() {
                         className="directory-item"
                         onClick={() => { playClick3(); setActiveListId(list.id); }}
                       >
-                        <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
-                          {list.title || "Untitled"}
-                        </span>
+                        <div className="directory-info">
+                          <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
+                            {list.title || "Untitled"}
+                          </span>
+                          <div className="list-counts">
+                            <span className="count-pending" title="Remaining">{list.items.filter(t => !t.completed).length}</span>
+                            <span className="count-completed" title="Completed">{list.items.filter(t => t.completed).length}</span>
+                          </div>
+                        </div>
                         <div className="directory-actions">
                           <button
                             className="list-action-btn"
@@ -605,13 +617,19 @@ function NotepadWidget() {
               /* 2nd View: ACTIVE LIST VIEW */
               <div className="active-list-view">
                 <div className="active-list-header">
-                  <input
-                    type="text"
-                    className={`list-title-input ${!activeList?.title ? "untitled" : ""}`}
-                    placeholder="Untitled"
-                    value={activeList?.title || ""}
-                    onChange={(e) => handleTitleChange(activeListId, e.target.value)}
-                  />
+                  <div className="directory-info">
+                    <input
+                      type="text"
+                      className={`list-title-input ${!activeList?.title ? "untitled" : ""}`}
+                      placeholder="Untitled"
+                      value={activeList?.title || ""}
+                      onChange={(e) => handleTitleChange(activeListId!, e.target.value)}
+                    />
+                    <div className="list-counts" style={{ marginRight: "12px" }}>
+                      <span className="count-pending" title="Remaining">{activeTodos.length}</span>
+                      <span className="count-completed" title="Completed">{completedTodos.length}</span>
+                    </div>
+                  </div>
                   <button className="back-btn" onClick={() => { playClick(); setActiveListId(null); }} title="Back to Lists">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 18 9 12 15 6" />
