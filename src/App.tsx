@@ -411,6 +411,38 @@ function NotepadWidget() {
     }));
   };
 
+  const handleInsertTask = (e: React.KeyboardEvent<HTMLInputElement>, currentGlobalIdx: number) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (!activeListId) return;
+
+      playClick2();
+      const newTodo: TodoItem = {
+        id: crypto.randomUUID(),
+        text: "",
+        completed: false,
+      };
+
+      setUserData((prev) => {
+        const newLists = [...prev.lists];
+        const listIdx = newLists.findIndex((l) => l.id === activeListId);
+        if (listIdx === -1) return prev;
+
+        const newItems = [...newLists[listIdx].items];
+        // Insert the new item exactly one slot below the current index
+        newItems.splice(currentGlobalIdx + 1, 0, newTodo);
+
+        newLists[listIdx] = { ...newLists[listIdx], items: newItems };
+        return { ...prev, lists: newLists };
+      });
+
+      // Micro-delay to let React render the new input, then auto-focus it
+      setTimeout(() => {
+        document.getElementById(`input-${newTodo.id}`)?.focus();
+      }, 10);
+    }
+  };
+
   const toggleTodo = (todoId: string) => {
     playClick2();
     setUserData((prev) => ({
@@ -667,6 +699,7 @@ function NotepadWidget() {
                           className="todo-text"
                           placeholder="Empty task..."
                           value={todo.text}
+                          onKeyDown={(e) => handleInsertTask(e, globalIdx)}
                           onChange={(e) => {
                             const newText = e.target.value;
                             setUserData((prev) => ({
