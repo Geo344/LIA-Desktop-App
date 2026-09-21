@@ -248,6 +248,9 @@ function NotepadWidget() {
   const [userData, setUserData] = useState<UserData>({ lists: [], notes: "" });
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
   const [activeListId, setActiveListId] = useState<string | null>(null);
+
+  // Array to track tasks that are currently animating
+  const [animatingTasks, setAnimatingTasks] = useState<string[]>([]);
   
   // --- Archive & Visibility State ---
   const [showArchivedView, setShowArchivedView] = useState(false);
@@ -445,19 +448,27 @@ function NotepadWidget() {
 
   const toggleTodo = (todoId: string) => {
     playClick2();
-    setUserData((prev) => ({
-      ...prev,
-      lists: prev.lists.map((l) =>
-        l.id === activeListId
-          ? {
-              ...l,
-              items: l.items.map((t) =>
-                t.id === todoId ? { ...t, completed: !t.completed } : t
-              ),
-            }
-          : l
-      ),
-    }));
+    
+    // Trigger the CSS animation
+    setAnimatingTasks((prev) => [...prev, todoId]);
+
+    // Wait 250ms for the animation to finish before moving the item
+    setTimeout(() => {
+      setAnimatingTasks((prev) => prev.filter(id => id !== todoId));
+      setUserData((prev) => ({
+        ...prev,
+        lists: prev.lists.map((l) =>
+          l.id === activeListId
+            ? {
+                ...l,
+                items: l.items.map((t) =>
+                  t.id === todoId ? { ...t, completed: !t.completed } : t
+                ),
+              }
+            : l
+        ),
+      }));
+    }, 200);
   };
 
   const deleteTodo = (todoId: string) => {
@@ -689,7 +700,7 @@ function NotepadWidget() {
                         <div className="keep-checkbox-wrapper">
                           <input
                             type="checkbox"
-                            className="keep-checkbox"
+                            className={`keep-checkbox ${animatingTasks.includes(todo.id) ? "pop-animate" : ""}`}
                             checked={todo.completed}
                             onChange={() => toggleTodo(todo.id)}
                           />
@@ -728,7 +739,7 @@ function NotepadWidget() {
                         <div className="keep-checkbox-wrapper">
                           <input
                             type="checkbox"
-                            className="keep-checkbox"
+                            className={`keep-checkbox ${animatingTasks.includes(todo.id) ? "pop-animate" : ""}`}
                             checked={todo.completed}
                             onChange={() => toggleTodo(todo.id)}
                           />
