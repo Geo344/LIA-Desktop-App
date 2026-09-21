@@ -266,6 +266,8 @@ function NotepadWidget() {
 
   const playClick2 = () => invoke("play_ping", { soundType: "notepad_check" }).catch(console.error);
 
+  const playClick3 = () => invoke("play_ping", { soundType: "notepad_switch" }).catch(console.error);
+
   const handleTabClick = (targetTab: "notes" | "todos") => {
     if (isHidden) {
       invoke("play_ping", { soundType: "notepad_open" }).catch(console.error);
@@ -512,7 +514,7 @@ function NotepadWidget() {
                       <div
                         key={list.id}
                         className="directory-item archived-row"
-                        onClick={() => { playClick2(); setActiveListId(list.id); }}
+                        onClick={() => { playClick3(); setActiveListId(list.id); }}
                       >
                         <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
                           {list.title || "Untitled"}
@@ -563,7 +565,7 @@ function NotepadWidget() {
                       <div
                         key={list.id}
                         className="directory-item"
-                        onClick={() => { playClick2(); setActiveListId(list.id); }}
+                        onClick={() => { playClick3(); setActiveListId(list.id); }}
                       >
                         <span className={`directory-title ${!list.title ? "untitled" : ""}`}>
                           {list.title || "Untitled"}
