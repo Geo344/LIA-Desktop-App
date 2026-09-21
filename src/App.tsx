@@ -397,6 +397,35 @@ function NotepadWidget() {
     if (activeListId === id) setActiveListId(null);
   };
 
+  const copyList = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); 
+    playClick();
+    
+    setUserData((prev) => {
+      const listIndex = prev.lists.findIndex((l) => l.id === id);
+      if (listIndex === -1) return prev;
+
+      const listToCopy = prev.lists[listIndex];
+      
+      // Duplicate list and assign new UUIDs to everything
+      const copiedList: TodoList = {
+        id: crypto.randomUUID(),
+        title: listToCopy.title ? `${listToCopy.title} - copy` : "Untitled - copy",
+        archived: listToCopy.archived, // Keeps it in the same directory view
+        items: listToCopy.items.map(item => ({
+          ...item,
+          id: crypto.randomUUID() 
+        }))
+      };
+
+      const newLists = [...prev.lists];
+      // Splice places it exactly one slot below the copied list
+      newLists.splice(listIndex + 1, 0, copiedList);
+
+      return { ...prev, lists: newLists };
+    });
+  };
+
   // --- To-Do Handlers ---
   const handleAddNewTask = () => {
     if (!activeListId) return;
@@ -571,6 +600,16 @@ function NotepadWidget() {
                         <div className="directory-actions">
                           <button
                             className="list-action-btn"
+                            onClick={(e) => copyList(list.id, e)}
+                            title="Copy List"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          </button>
+                          <button
+                            className="list-action-btn"
                             onClick={(e) => toggleArchiveList(list.id, e)}
                             title="Unarchive List"
                           >
@@ -626,6 +665,16 @@ function NotepadWidget() {
                           </div>
                         </div>
                         <div className="directory-actions">
+                          <button
+                            className="list-action-btn"
+                            onClick={(e) => copyList(list.id, e)}
+                            title="Copy List"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          </button>
                           <button
                             className="list-action-btn"
                             onClick={(e) => toggleArchiveList(list.id, e)}
