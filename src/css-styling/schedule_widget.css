@@ -3,8 +3,8 @@
   position: absolute;
   top: 200px; 
   left: 0; /* Anchors the widget flush against the left edge */
-  width: 240px;
-  height: 132px;
+  width: 260px;
+  height: 160px;
 
   display: flex;
   flex-direction: column;

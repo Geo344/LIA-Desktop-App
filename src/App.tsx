@@ -597,7 +597,7 @@ function NotepadWidget() {
                     className="archive-nav-btn" 
                     onClick={() => { playClick(); setShowArchivedView(true); }}
                   >
-                    Archived Lists
+                    To Archive
                   </button>
                 </div>
               )
