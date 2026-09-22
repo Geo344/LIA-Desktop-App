@@ -755,6 +755,7 @@ function NotepadWidget() {
                           />
                         </div>
                         <input
+                          id={`input-${todo.id}`}
                           type="text"
                           className="todo-text"
                           placeholder="Empty task..."
