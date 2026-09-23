@@ -339,6 +339,7 @@ export default function NotepadWidget() {
           className={`todo-text ${isCompleted ? "completed" : ""}`}
           placeholder={!isCompleted ? "Empty task..." : ""}
           value={todo.text}
+          autoComplete="off" /* Add this line to block Edge autofill */
           onKeyDown={!isCompleted && globalIdx !== undefined ? (e) => handleInsertTask(e, globalIdx) : undefined}
           onChange={(e) => handleUpdateTodoText(todo.id, e.target.value)}
         />
@@ -356,6 +357,7 @@ export default function NotepadWidget() {
             className="archive-search-input"
             placeholder="Search archives..."
             value={archiveSearchQuery}
+            autoComplete="off" /* Add this line to block Edge autofill */
             onChange={(e) => setArchiveSearchQuery(e.target.value)}
           />
           <div className="directory-list">
@@ -401,6 +403,7 @@ export default function NotepadWidget() {
                       className={`list-title-input ${!activeList?.title ? "untitled" : ""}`}
                       placeholder="Untitled"
                       value={activeList?.title || ""}
+                      autoComplete="off" /* Add this line to block Edge autofill */
                       onChange={(e) => handleTitleChange(activeListId, e.target.value)}
                     />
                     <div className="list-counts" style={{ marginRight: "12px" }}>
