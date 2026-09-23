@@ -23,34 +23,23 @@ export default function NotepadWidget() {
   const [userData, setUserData] = useState<UserData>({ lists: [], notes: "" });
   const [activeTab, setActiveTab] = useState<"notes" | "todos">("notes");
   const [activeListId, setActiveListId] = useState<string | null>(null);
+  
   const [animatingTasks, setAnimatingTasks] = useState<string[]>([]);
   const [showArchivedView, setShowArchivedView] = useState(false);
   const [archiveSearchQuery, setArchiveSearchQuery] = useState("");
   const [isHidden, setIsHidden] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const dragItemRef = useRef<number | null>(null);
   const scrollListRef = useRef<HTMLDivElement>(null);
 
+  // --- Audio Handlers ---
   const playClick = () => invoke("play_ping", { soundType: "notepad_click" }).catch(console.error);
   const playClick2 = () => invoke("play_ping", { soundType: "notepad_check" }).catch(console.error);
   const playClick3 = () => invoke("play_ping", { soundType: "notepad_switch" }).catch(console.error);
 
-  const handleTabClick = (targetTab: "notes" | "todos") => {
-    if (isHidden) {
-      invoke("play_ping", { soundType: "notepad_open" }).catch(console.error);
-      setIsHidden(false);
-      setActiveTab(targetTab);
-    } else if (activeTab !== targetTab) {
-      invoke("play_ping", { soundType: "notepad_switch" }).catch(console.error);
-      setActiveTab(targetTab);
-    } else {
-      playClick();
-      setIsHidden(true);
-    }
-  };
-
+  // --- Lifecycle & Side Effects ---
   useEffect(() => {
     invoke<UserData>("load_user_data")
       .then((data) => {
@@ -108,11 +97,28 @@ export default function NotepadWidget() {
     };
   }, [draggedIdx]);
 
+  // --- UI Handlers ---
+  const handleTabClick = (targetTab: "notes" | "todos") => {
+    if (isHidden) {
+      invoke("play_ping", { soundType: "notepad_open" }).catch(console.error);
+      setIsHidden(false);
+      setActiveTab(targetTab);
+    } else if (activeTab !== targetTab) {
+      playClick3();
+      setActiveTab(targetTab);
+    } else {
+      playClick();
+      setIsHidden(true);
+    }
+  };
+
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setUserData((prev) => ({ ...prev, notes: e.target.value }));
   };
 
+  // --- List Data Handlers ---
   const handleAddNewList = () => {
+    playClick2();
     const newList: TodoList = { id: crypto.randomUUID(), title: "", archived: false, items: [] };
     setUserData((prev) => ({ ...prev, lists: [...prev.lists, newList] }));
     setActiveListId(newList.id);
@@ -147,10 +153,10 @@ export default function NotepadWidget() {
   const copyList = (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); 
     playClick();
-    
     setUserData((prev) => {
       const listIndex = prev.lists.findIndex((l) => l.id === id);
       if (listIndex === -1) return prev;
+      
       const listToCopy = prev.lists[listIndex];
       const copiedList: TodoList = {
         id: crypto.randomUUID(),
@@ -158,12 +164,14 @@ export default function NotepadWidget() {
         archived: listToCopy.archived,
         items: listToCopy.items.map(item => ({ ...item, id: crypto.randomUUID() }))
       };
+      
       const newLists = [...prev.lists];
       newLists.splice(listIndex + 1, 0, copiedList);
       return { ...prev, lists: newLists };
     });
   };
 
+  // --- Task Data Handlers ---
   const handleAddNewTask = () => {
     if (!activeListId) return;
     playClick2();
@@ -179,11 +187,13 @@ export default function NotepadWidget() {
       e.preventDefault();
       if (!activeListId) return;
       playClick2();
+      
       const newTodo: TodoItem = { id: crypto.randomUUID(), text: "", completed: false };
       setUserData((prev) => {
         const newLists = [...prev.lists];
         const listIdx = newLists.findIndex((l) => l.id === activeListId);
         if (listIdx === -1) return prev;
+        
         const newItems = [...newLists[listIdx].items];
         newItems.splice(currentGlobalIdx + 1, 0, newTodo);
         newLists[listIdx] = { ...newLists[listIdx], items: newItems };
@@ -191,6 +201,17 @@ export default function NotepadWidget() {
       });
       setTimeout(() => document.getElementById(`input-${newTodo.id}`)?.focus(), 10);
     }
+  };
+
+  const handleUpdateTodoText = (todoId: string, newText: string) => {
+    setUserData((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) =>
+        l.id === activeListId 
+          ? { ...l, items: l.items.map((t) => t.id === todoId ? { ...t, text: newText } : t) } 
+          : l
+      ),
+    }));
   };
 
   const toggleTodo = (todoId: string) => {
@@ -219,6 +240,7 @@ export default function NotepadWidget() {
     }));
   };
 
+  // --- Drag & Drop Handlers ---
   const handlePointerDown = (e: React.PointerEvent, index: number) => {
     if ((e.target as HTMLElement).classList.contains("drag-handle")) {
       dragItemRef.current = index;
@@ -230,27 +252,130 @@ export default function NotepadWidget() {
   const handlePointerEnter = (targetIdx: number) => {
     const currentDrag = dragItemRef.current;
     if (currentDrag === null || currentDrag === targetIdx || !activeListId) return;
+    
     setUserData((prev) => {
       const newLists = [...prev.lists];
       const listIdx = newLists.findIndex((l) => l.id === activeListId);
       if (listIdx === -1) return prev;
+      
       const newItems = [...newLists[listIdx].items];
       const [movedItem] = newItems.splice(currentDrag, 1);
       newItems.splice(targetIdx, 0, movedItem);
       newLists[listIdx] = { ...newLists[listIdx], items: newItems };
       return { ...prev, lists: newLists };
     });
+    
     dragItemRef.current = targetIdx;
     setDraggedIdx(targetIdx);
   };
 
+  // --- Data Selectors ---
   const activeLists = userData.lists.filter((l) => !l.archived);
   const archivedLists = userData.lists
     .filter((l) => l.archived)
     .filter((l) => (l.title || "Untitled").toLowerCase().includes(archiveSearchQuery.toLowerCase()));
+  
   const activeList = userData.lists.find((l) => l.id === activeListId);
   const activeTodos = activeList?.items.filter((t) => !t.completed) || [];
   const completedTodos = activeList?.items.filter((t) => t.completed) || [];
+
+  // --- Reusable UI Renderers ---
+  const renderListRow = (list: TodoList) => (
+    <div key={list.id} className={`directory-item ${list.archived ? "archived-row" : ""}`} onClick={() => { playClick3(); setActiveListId(list.id); }}>
+      <div className="directory-info">
+        <span className={`directory-title ${!list.title ? "untitled" : ""}`}>{list.title || "Untitled"}</span>
+        <div className="list-counts">
+          <span className="count-pending" title="Remaining">{list.items.filter(t => !t.completed).length}</span>
+          <span className="count-completed" title="Completed">{list.items.filter(t => t.completed).length}</span>
+        </div>
+      </div>
+      <div className="directory-actions">
+        <button className="list-action-btn" onClick={(e) => copyList(list.id, e)} title="Copy List">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <button className="list-action-btn" onClick={(e) => toggleArchiveList(list.id, e)} title={list.archived ? "Unarchive List" : "Archive List"}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+            <rect x="1" y="3" width="22" height="5"></rect>
+            <line x1="12" y1="17" x2="12" y2="12"></line>
+            {list.archived ? <polyline points="15 14 12 11 9 14"></polyline> : <line x1="10" y1="12" x2="14" y2="12"></line>}
+          </svg>
+        </button>
+        <button className="list-action-btn delete" onClick={(e) => deleteList(list.id, e)} title="Delete List">✕</button>
+      </div>
+    </div>
+  );
+
+  const renderTaskRow = (todo: TodoItem, globalIdx?: number) => {
+    const isCompleted = todo.completed;
+    const isDragging = draggedIdx === globalIdx && !isCompleted;
+
+    return (
+      <div 
+        key={todo.id} 
+        className={`todo-item ${isCompleted ? "completed-row" : ""} ${isDragging ? "dragging" : ""}`}
+        onPointerEnter={!isCompleted && globalIdx !== undefined ? () => handlePointerEnter(globalIdx) : undefined}
+      >
+        <span 
+          className={`drag-handle ${isCompleted ? "invisible-handle" : ""}`} 
+          onPointerDown={!isCompleted && globalIdx !== undefined ? (e) => handlePointerDown(e, globalIdx) : undefined}
+        >
+          ⋮⋮
+        </span>
+        <div className="keep-checkbox-wrapper">
+          <input
+            type="checkbox"
+            className={`keep-checkbox ${animatingTasks.includes(todo.id) ? "pop-animate" : ""}`}
+            checked={isCompleted}
+            onChange={() => toggleTodo(todo.id)}
+          />
+        </div>
+        <input
+          id={!isCompleted ? `input-${todo.id}` : undefined}
+          type="text"
+          className={`todo-text ${isCompleted ? "completed" : ""}`}
+          placeholder={!isCompleted ? "Empty task..." : ""}
+          value={todo.text}
+          onKeyDown={!isCompleted && globalIdx !== undefined ? (e) => handleInsertTask(e, globalIdx) : undefined}
+          onChange={(e) => handleUpdateTodoText(todo.id, e.target.value)}
+        />
+        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>✕</button>
+      </div>
+    );
+  };
+
+  const renderDirectoryView = () => {
+    if (showArchivedView) {
+      return (
+        <div className="directory-view">
+          <input
+            type="text"
+            className="archive-search-input"
+            placeholder="Search archives..."
+            value={archiveSearchQuery}
+            onChange={(e) => setArchiveSearchQuery(e.target.value)}
+          />
+          <div className="directory-list">
+            {archivedLists.map(renderListRow)}
+          </div>
+          <button className="archive-nav-btn" onClick={() => { playClick(); setShowArchivedView(false); setArchiveSearchQuery(""); }}>Back</button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="directory-view">
+        <button className="add-list-btn" onClick={handleAddNewList}>+ New List</button>
+        <div className="directory-list">
+          {activeLists.map(renderListRow)}
+        </div>
+        <button className="archive-nav-btn" onClick={() => { playClick(); setShowArchivedView(true); }}>To Archive</button>
+      </div>
+    );
+  };
 
   return (
     <div className={`notepad-widget ${isHidden ? "hidden" : ""}`}>
@@ -266,82 +391,7 @@ export default function NotepadWidget() {
         ) : (
           <div className="todo-container">
             {!activeListId ? (
-              showArchivedView ? (
-                <div className="directory-view">
-                  <input
-                    type="text"
-                    className="archive-search-input"
-                    placeholder="Search archives..."
-                    value={archiveSearchQuery}
-                    onChange={(e) => setArchiveSearchQuery(e.target.value)}
-                  />
-                  <div className="directory-list">
-                    {archivedLists.map((list) => (
-                      <div key={list.id} className="directory-item archived-row" onClick={() => { playClick3(); setActiveListId(list.id); }}>
-                        <div className="directory-info">
-                          <span className={`directory-title ${!list.title ? "untitled" : ""}`}>{list.title || "Untitled"}</span>
-                          <div className="list-counts">
-                            <span className="count-pending" title="Remaining">{list.items.filter(t => !t.completed).length}</span>
-                            <span className="count-completed" title="Completed">{list.items.filter(t => t.completed).length}</span>
-                          </div>
-                        </div>
-                        <div className="directory-actions">
-                          <button className="list-action-btn" onClick={(e) => copyList(list.id, e)} title="Copy List">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                          </button>
-                          <button className="list-action-btn" onClick={(e) => toggleArchiveList(list.id, e)} title="Unarchive List">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="21 8 21 21 3 21 3 8"></polyline>
-                              <rect x="1" y="3" width="22" height="5"></rect>
-                              <line x1="12" y1="17" x2="12" y2="12"></line>
-                              <polyline points="15 14 12 11 9 14"></polyline>
-                            </svg>
-                          </button>
-                          <button className="list-action-btn delete" onClick={(e) => deleteList(list.id, e)} title="Delete List">✕</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="archive-nav-btn" onClick={() => { playClick(); setShowArchivedView(false); setArchiveSearchQuery(""); }}>Back</button>
-                </div>
-              ) : (
-                <div className="directory-view">
-                  <button className="add-list-btn" onClick={() => { playClick2(); handleAddNewList(); }}>+ New List</button>
-                  <div className="directory-list">
-                    {activeLists.map((list) => (
-                      <div key={list.id} className="directory-item" onClick={() => { playClick3(); setActiveListId(list.id); }}>
-                        <div className="directory-info">
-                          <span className={`directory-title ${!list.title ? "untitled" : ""}`}>{list.title || "Untitled"}</span>
-                          <div className="list-counts">
-                            <span className="count-pending" title="Remaining">{list.items.filter(t => !t.completed).length}</span>
-                            <span className="count-completed" title="Completed">{list.items.filter(t => t.completed).length}</span>
-                          </div>
-                        </div>
-                        <div className="directory-actions">
-                          <button className="list-action-btn" onClick={(e) => copyList(list.id, e)} title="Copy List">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                          </button>
-                          <button className="list-action-btn" onClick={(e) => toggleArchiveList(list.id, e)} title="Archive List">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="21 8 21 21 3 21 3 8"></polyline>
-                              <rect x="1" y="3" width="22" height="5"></rect>
-                              <line x1="10" y1="12" x2="14" y2="12"></line>
-                            </svg>
-                          </button>
-                          <button className="list-action-btn delete" onClick={(e) => deleteList(list.id, e)} title="Delete List">✕</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="archive-nav-btn" onClick={() => { playClick(); setShowArchivedView(true); }}>To Archive</button>
-                </div>
-              )
+              renderDirectoryView()
             ) : (
               <div className="active-list-view">
                 <div className="active-list-header">
@@ -351,7 +401,7 @@ export default function NotepadWidget() {
                       className={`list-title-input ${!activeList?.title ? "untitled" : ""}`}
                       placeholder="Untitled"
                       value={activeList?.title || ""}
-                      onChange={(e) => handleTitleChange(activeListId!, e.target.value)}
+                      onChange={(e) => handleTitleChange(activeListId, e.target.value)}
                     />
                     <div className="list-counts" style={{ marginRight: "12px" }}>
                       <span className="count-pending" title="Remaining">{activeTodos.length}</span>
@@ -368,70 +418,14 @@ export default function NotepadWidget() {
                 <div className="todo-list" ref={scrollListRef}>
                   {activeTodos.map((todo) => {
                     const globalIdx = activeList!.items.findIndex((t) => t.id === todo.id);
-                    return (
-                      <div key={todo.id} className={`todo-item ${draggedIdx === globalIdx ? "dragging" : ""}`} onPointerEnter={() => handlePointerEnter(globalIdx)}>
-                        <span className="drag-handle" onPointerDown={(e) => handlePointerDown(e, globalIdx)}>⋮⋮</span>
-                        <div className="keep-checkbox-wrapper">
-                          <input
-                            type="checkbox"
-                            className={`keep-checkbox ${animatingTasks.includes(todo.id) ? "pop-animate" : ""}`}
-                            checked={todo.completed}
-                            onChange={() => toggleTodo(todo.id)}
-                          />
-                        </div>
-                        <input
-                          id={`input-${todo.id}`}
-                          type="text"
-                          className="todo-text"
-                          placeholder="Empty task..."
-                          value={todo.text}
-                          onKeyDown={(e) => handleInsertTask(e, globalIdx)}
-                          onChange={(e) => {
-                            const newText = e.target.value;
-                            setUserData((prev) => ({
-                              ...prev,
-                              lists: prev.lists.map((l) =>
-                                l.id === activeListId ? { ...l, items: l.items.map((t) => t.id === todo.id ? { ...t, text: newText } : t) } : l
-                              ),
-                            }));
-                          }}
-                        />
-                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>✕</button>
-                      </div>
-                    );
+                    return renderTaskRow(todo, globalIdx);
                   })}
+                  
                   <button className="add-item-btn" onClick={handleAddNewTask}>+ Item</button>
 
                   <div className="completed-section">
                     <div className="completed-header">{completedTodos.length} Completed</div>
-                    {completedTodos.map((todo) => (
-                      <div key={todo.id} className="todo-item completed-row">
-                        <span className="drag-handle invisible-handle">⋮⋮</span>
-                        <div className="keep-checkbox-wrapper">
-                          <input
-                            type="checkbox"
-                            className={`keep-checkbox ${animatingTasks.includes(todo.id) ? "pop-animate" : ""}`}
-                            checked={todo.completed}
-                            onChange={() => toggleTodo(todo.id)}
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          className="todo-text completed"
-                          value={todo.text}
-                          onChange={(e) => {
-                            const newText = e.target.value;
-                            setUserData((prev) => ({
-                              ...prev,
-                              lists: prev.lists.map((l) =>
-                                l.id === activeListId ? { ...l, items: l.items.map((t) => t.id === todo.id ? { ...t, text: newText } : t) } : l
-                              ),
-                            }));
-                          }}
-                        />
-                        <button className="todo-delete" onClick={() => deleteTodo(todo.id)}>✕</button>
-                      </div>
-                    ))}
+                    {completedTodos.map(todo => renderTaskRow(todo))}
                   </div>
                 </div>
               </div>
