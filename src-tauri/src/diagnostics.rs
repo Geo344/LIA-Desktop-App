@@ -21,7 +21,7 @@ pub(crate) fn report_error(context: &'static str, error: impl Display) -> String
         true
     }).unwrap_or(true);
     if should_log {
-        eprintln!("[LIA ERROR] {message}");
+        eprintln!("[{} LIA ERROR] {message}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S%:z"));
     }
     message
 }

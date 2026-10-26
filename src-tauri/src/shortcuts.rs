@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use crate::diagnostics::report_error;
 
 // Desktop item representation for the frontend
 #[derive(Serialize)]
@@ -26,8 +27,14 @@ pub fn get_desktop_items() -> Result<Vec<DesktopItem>, String> {
     }
 
     for desktop_path in directories {
-        if let Ok(entries) = fs::read_dir(desktop_path) {
-            for entry in entries.flatten() {
+        if let Ok(entries) = fs::read_dir(desktop_path).inspect_err(|error| {
+            if error.kind() != std::io::ErrorKind::NotFound { report_error("Read desktop directory", error); }
+        }) {
+            for entry in entries {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(error) => { report_error("Read desktop entry", error); continue; }
+                };
                 let path = entry.path();
                 let file_name = path
                     .file_stem()
@@ -56,6 +63,6 @@ pub fn launch_item(path: String) -> Result<(), String> {
     Command::new("explorer")
         .arg(&path)
         .spawn()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| report_error("Launch desktop shortcut", e))?;
     Ok(())
 }

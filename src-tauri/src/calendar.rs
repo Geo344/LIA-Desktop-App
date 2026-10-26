@@ -348,14 +348,16 @@ pub async fn fetch_todays_events(app: tauri::AppHandle) -> Result<Vec<AgendaEven
 
         if let Some(start) = item.start {
             if let Some(dt_str) = start.date_time {
-                if let Ok(parsed_start) = chrono::DateTime::parse_from_rfc3339(&dt_str) {
+                if let Ok(parsed_start) = chrono::DateTime::parse_from_rfc3339(&dt_str)
+                    .inspect_err(|_| { report_error("Parse Google event start", "Invalid RFC3339 timestamp"); }) {
                     let start_utc = parsed_start.with_timezone(&Utc);
                     let now_utc = now.with_timezone(&Utc);
 
                     // Check end time to see if event is already over or currently active
                     if let Some(end) = &item.end {
                         if let Some(end_dt_str) = &end.date_time {
-                            if let Ok(parsed_end) = chrono::DateTime::parse_from_rfc3339(end_dt_str) {
+                            if let Ok(parsed_end) = chrono::DateTime::parse_from_rfc3339(end_dt_str)
+                                .inspect_err(|_| { report_error("Parse Google event end", "Invalid RFC3339 timestamp"); }) {
                                 let end_utc = parsed_end.with_timezone(&Utc);
                                 
                                 // 1. Drop events that already ended
@@ -407,6 +409,66 @@ mod tests {
     fn run_test(future: impl std::future::Future<Output = ()>) {
         tokio::runtime::Builder::new_current_thread()
             .enable_all().build().unwrap().block_on(future);
+    }
+
+    async fn mock_google_response(status: &str, body: &str) -> reqwest::Response {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let response = format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0; 4096];
+            stream.read(&mut request).await.unwrap();
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+        let response = Client::builder().no_proxy().timeout(StdDuration::from_secs(2))
+            .build().unwrap().get(format!("http://{address}/")).send().await.unwrap();
+        server.await.unwrap();
+        response
+    }
+
+    #[test]
+    fn google_http_errors_preserve_safe_codes_and_exclude_private_details() {
+        run_test(async {
+            let response = mock_google_response("403 Forbidden", r#"{"error":{"message":"private-event-title secret-token","errors":[{"reason":"rateLimitExceeded"}]}}"#).await;
+            let error = read_google_response::<CalendarResponse>(response, "Test calendar quota").await.unwrap_err();
+            assert_eq!(error.code.as_deref(), Some("rateLimitExceeded"));
+            assert!(error.message.contains("403"));
+            assert!(!error.message.contains("private-event-title"));
+            assert!(!error.message.contains("secret-token"));
+        });
+    }
+
+    #[test]
+    fn rejected_refresh_token_is_distinguished_from_server_failure() {
+        run_test(async {
+            let response = mock_google_response("400 Bad Request", r#"{"error":"invalid_grant","error_description":"secret-token"}"#).await;
+            let error = read_google_response::<serde_json::Value>(response, "Test rejected refresh").await.unwrap_err();
+            assert_eq!(error.code.as_deref(), Some("invalid_grant"));
+            assert!(!error.message.contains("secret-token"));
+            let response = mock_google_response("503 Service Unavailable", "<html>upstream unavailable</html>").await;
+            let error = read_google_response::<CalendarResponse>(response, "Test server failure").await.unwrap_err();
+            assert!(error.message.contains("503"));
+            assert!(error.code.is_none());
+        });
+    }
+
+    #[test]
+    fn google_success_is_parsed_and_malformed_success_is_rejected() {
+        run_test(async {
+            let response = mock_google_response("200 OK", r#"{"items":[],"nextPageToken":"next"}"#).await;
+            let page = read_google_response::<CalendarResponse>(response, "Test calendar success").await.unwrap();
+            assert!(page.items.is_empty());
+            assert_eq!(page.next_page_token.as_deref(), Some("next"));
+            let response = mock_google_response("200 OK", "not JSON").await;
+            assert!(read_google_response::<CalendarResponse>(response, "Test malformed success").await.is_err());
+        });
+    }
+
+    #[test]
+    fn unknown_google_error_codes_are_not_echoed() {
+        let body = serde_json::json!({"error": "secret-token"});
+        assert!(google_error_code(&body).is_none());
     }
 
     #[test]

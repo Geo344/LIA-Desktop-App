@@ -4,6 +4,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use tauri::State;
+use crate::diagnostics::report_error;
 
 // Embed sound effects directly into the compiled Rust binary
 static SHORTCUT_BYTES: &[u8] = include_bytes!("../../src/assets/sound_effects/Shortcut-button.wav");
@@ -23,8 +24,12 @@ impl AudioEngine {
 
         thread::spawn(move || {
             let host = rodio::cpal::default_host();
-            let mut current_device = host.default_output_device().and_then(|d| d.name().ok());
-            let (mut _stream, mut stream_handle) = OutputStream::try_default().expect("Failed to initialize audio");
+            let mut current_device = host.default_output_device().and_then(|d| d.name()
+                .inspect_err(|error| { report_error("Get initial audio device name", error); }).ok());
+            let (mut _stream, mut stream_handle) = match OutputStream::try_default() {
+                Ok(output) => output,
+                Err(error) => { report_error("Initialize audio output", error); return; }
+            };
 
             loop {
                 // Wait for a play request, waking up every 1 second while idle to check hardware
@@ -39,17 +44,22 @@ impl AudioEngine {
                             _ => SHORTCUT_BYTES, 
                         };
 
-                        if let Ok(decoder) = Decoder::new(Cursor::new(bytes)) {
-                            let _ = stream_handle.play_raw(decoder.convert_samples());
+                        if let Ok(decoder) = Decoder::new(Cursor::new(bytes))
+                            .inspect_err(|error| { report_error("Decode sound effect", error); }) {
+                            if let Err(error) = stream_handle.play_raw(decoder.convert_samples()) {
+                                report_error("Play sound effect", error);
+                            }
                         }
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         // Idle timeout reached. Check Windows for a new default device
                         if let Some(device) = host.default_output_device() {
-                            if let Ok(name) = device.name() {
+                            if let Ok(name) = device.name()
+                                .inspect_err(|error| { report_error("Get audio device name", error); }) {
                                 if Some(name.clone()) != current_device {
                                     // Device hot-swap detected! Rebuild the stream in the background
-                                    if let Ok((new_stream, new_handle)) = OutputStream::try_default() {
+                                    if let Ok((new_stream, new_handle)) = OutputStream::try_default()
+                                        .inspect_err(|error| { report_error("Switch audio output", error); }) {
                                         _stream = new_stream;
                                         stream_handle = new_handle;
                                         current_device = Some(name);
@@ -68,6 +78,6 @@ impl AudioEngine {
 }
 
 #[tauri::command]
-pub fn play_ping(audio: State<'_, AudioEngine>, sound_type: String) {
-    let _ = audio.tx.send(sound_type);
+pub fn play_ping(audio: State<'_, AudioEngine>, sound_type: String) -> Result<(), String> {
+    audio.tx.send(sound_type).map_err(|_| report_error("Queue sound effect", "Audio worker is unavailable"))
 }

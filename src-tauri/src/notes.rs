@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use crate::diagnostics::report_error;
 
 // --- DATA MODELS ---
 
@@ -56,11 +57,11 @@ pub fn load_user_data() -> Result<UserData, String> {
     if path.exists() {
         match fs::read_to_string(&path) {
             Ok(data) => {
-                // Gracefully handles corrupted or empty JSON strings by falling back to defaults
-                let user_data: UserData = serde_json::from_str(&data).unwrap_or_default();
-                Ok(user_data)
+                // Do not turn corrupted data into an empty state that autosave
+                // could write over the user's existing notes.
+                serde_json::from_str(&data).map_err(|_| report_error("Load notes", "data.json contains invalid JSON or an invalid data format"))
             }
-            Err(e) => Err(format!("Failed to read data.json: {}", e)),
+            Err(e) => Err(report_error("Read notes file", e)),
         }
     } else {
         // Return empty default state if the file doesn't exist yet
@@ -74,12 +75,12 @@ pub fn save_user_data(data: UserData) -> Result<(), String> {
     
     // Ensure the LIA directory exists before writing
     if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+        fs::create_dir_all(parent).map_err(|e| report_error("Create notes directory", e))?;
     }
 
-    let json = serde_json::to_string_pretty(&data).map_err(|e| format!("Serialization error: {}", e))?;
+    let json = serde_json::to_string_pretty(&data).map_err(|_| report_error("Serialize notes", "Could not serialize user data"))?;
     
-    fs::write(path, json).map_err(|e| format!("Failed to write data.json: {}", e))?;
+    fs::write(path, json).map_err(|e| report_error("Write notes file", e))?;
     
     Ok(())
 }

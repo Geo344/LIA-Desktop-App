@@ -115,7 +115,10 @@ pub async fn get_media_state() -> Result<MediaState, String> {
         // Check if YouTube Music is physically open on the OS
         let mut is_ytm_open = false;
         unsafe {
-            let _ = EnumWindows(Some(check_ytm_window_proc), LPARAM(&mut is_ytm_open as *mut _ as isize));
+            if let Err(error) = EnumWindows(Some(check_ytm_window_proc), LPARAM(&mut is_ytm_open as *mut _ as isize)) {
+                // Returning FALSE after a match intentionally stops enumeration.
+                if !is_ytm_open { report_error("Enumerate media windows", error); }
+            }
         }
 
         {
