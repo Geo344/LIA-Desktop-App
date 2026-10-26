@@ -2,14 +2,62 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::net::TcpListener;
-use std::io::{Read, Write};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex;
+use tokio::time::timeout;
+use tauri::Emitter;
 use chrono::{Local, Utc, TimeZone, NaiveTime, Duration};
 use reqwest::Client;
 use dotenvy::dotenv;
+use crate::diagnostics::report_error;
+use serde::de::DeserializeOwned;
 
 const REDIRECT_PORT: u16 = 8989;
 const GOOGLE_SCOPES: &str = "https://www.googleapis.com/auth/calendar.readonly";
+const AUTH_CALLBACK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+static AUTH_LOCK: Mutex<()> = Mutex::const_new(());
+
+#[derive(Debug)]
+struct GoogleApiError {
+    code: Option<String>,
+    message: String,
+}
+
+// Only recognized machine-readable codes are retained; never log response bodies
+// or Google's free-form messages, which may contain private request details.
+fn google_error_code(body: &serde_json::Value) -> Option<String> {
+    let code = body.get("error").and_then(|error| error.as_str()
+        .or_else(|| error.get("errors")?.get(0)?.get("reason")?.as_str()));
+    code.filter(|code| matches!(*code,
+        "invalid_grant" | "invalid_client" | "invalid_request" | "unauthorized_client"
+        | "unsupported_grant_type" | "access_denied" | "invalid_scope"
+        | "rateLimitExceeded" | "userRateLimitExceeded" | "quotaExceeded"
+        | "dailyLimitExceeded" | "forbidden" | "notFound" | "authError"
+        | "insufficientPermissions" | "backendError" | "badRequest"
+        | "required" | "conditionNotMet" | "usageLimits"
+    )).map(str::to_owned)
+}
+
+async fn read_google_response<T: DeserializeOwned>(
+    response: reqwest::Response,
+    context: &'static str,
+) -> Result<T, GoogleApiError> {
+    let status = response.status();
+    if !status.is_success() {
+        let code = response.json::<serde_json::Value>().await.ok()
+            .as_ref().and_then(google_error_code);
+        let detail = match &code {
+            Some(code) => format!("HTTP {status} ({code})"),
+            None => format!("HTTP {status}"),
+        };
+        return Err(GoogleApiError { code, message: report_error(context, detail) });
+    }
+    response.json().await.map_err(|error| GoogleApiError {
+        code: None,
+        message: report_error(context, error.without_url()),
+    })
+}
 
 // --- DATA STRUCTURES ---
 
@@ -26,7 +74,10 @@ struct TokenResponse {
 
 #[derive(Deserialize, Debug)]
 struct CalendarResponse {
+    #[serde(default)]
     items: Vec<GoogleEvent>,
+    #[serde(rename = "nextPageToken")]
+    next_page_token: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -65,10 +116,13 @@ fn get_token_storage_path() -> PathBuf {
 
 fn load_refresh_token() -> Option<String> {
     let path = get_token_storage_path();
-    if let Ok(data) = fs::read_to_string(path) {
-        if let Ok(storage) = serde_json::from_str::<TokenStorage>(&data) {
-            return storage.refresh_token;
-        }
+    match fs::read_to_string(path) {
+        Ok(data) => match serde_json::from_str::<TokenStorage>(&data) {
+            Ok(storage) => return storage.refresh_token,
+            Err(_) => { report_error("Load Google refresh token", "Token file is invalid JSON or has an invalid format"); }
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+        Err(error) => { report_error("Read Google token file", error); }
     }
     None
 }
@@ -76,21 +130,106 @@ fn load_refresh_token() -> Option<String> {
 fn save_refresh_token(token: &str) {
     let path = get_token_storage_path();
     if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+        if let Err(error) = fs::create_dir_all(parent) {
+            report_error("Create Google token directory", error);
+            return;
+        }
     }
     let storage = TokenStorage {
         refresh_token: Some(token.to_string()),
     };
-    if let Ok(json) = serde_json::to_string_pretty(&storage) {
-        let _ = fs::write(path, json);
+    match serde_json::to_string_pretty(&storage) {
+        Ok(json) => if let Err(error) = fs::write(path, json) {
+            report_error("Save Google refresh token", error);
+        },
+        Err(_) => { report_error("Serialize Google refresh token", "Could not serialize token storage"); }
     }
 }
 
-async fn get_calendar_access_token() -> Result<String, String> {
+enum OAuthCallback {
+    Ignore,
+    Code(String),
+    Denied,
+}
+
+// Read complete headers, including requests split over multiple TCP packets.
+async fn handle_oauth_connection(mut stream: TcpStream) -> Result<OAuthCallback, String> {
+    let mut request = Vec::new();
+    let mut buffer = [0; 1024];
+    while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+        let count = stream.read(&mut buffer).await.map_err(|e| e.to_string())?;
+        if count == 0 || request.len() + count > 8192 {
+            return Ok(OAuthCallback::Ignore);
+        }
+        request.extend_from_slice(&buffer[..count]);
+    }
+
+    let request = String::from_utf8_lossy(&request);
+    let mut parts = request.lines().next().unwrap_or_default().split_whitespace();
+    let method = parts.next();
+    let target = parts.next().unwrap_or_default();
+    let url = reqwest::Url::parse(&format!("http://127.0.0.1{target}"))
+        .map_err(|_| "Invalid authentication callback.".to_string())?;
+    let params = url.query_pairs();
+    let code = params.clone().find(|(key, value)| key == "code" && !value.is_empty())
+        .map(|(_, value)| value.into_owned());
+    let denied = params.clone().any(|(key, _)| key == "error");
+    let is_callback = method == Some("GET") && url.path() == "/";
+    let (status, message) = if !is_callback || (code.is_none() && !denied) {
+        ("404 Not Found", "Waiting for Google sign-in.")
+    } else if denied {
+        ("200 OK", "Google sign-in was cancelled or denied. You can close this window.")
+    } else {
+        ("200 OK", "Authorization received. You can close this window and return to LIA.")
+    };
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{message}",
+        message.len()
+    );
+    // A closed browser tab must not discard an authorization code already received.
+    match timeout(std::time::Duration::from_secs(1), stream.write_all(response.as_bytes())).await {
+        Ok(Ok(())) => {},
+        Ok(Err(error)) => { report_error("Write Google callback response", error); },
+        Err(_) => { report_error("Write Google callback response", "Timed out"); },
+    }
+    if !is_callback {
+        return Ok(OAuthCallback::Ignore);
+    }
+    if denied {
+        return Ok(OAuthCallback::Denied);
+    }
+    Ok(code.map(OAuthCallback::Code).unwrap_or(OAuthCallback::Ignore))
+}
+
+async fn receive_oauth_callback(
+    listener: TcpListener,
+    deadline: std::time::Duration,
+) -> Result<String, String> {
+    // The deadline covers every accept/read/write, including unrelated requests.
+    // Owning the listener here releases its port on success, error, or timeout.
+    timeout(deadline, async {
+        loop {
+            let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            // Do not let an idle connection monopolize the entire login window.
+            match timeout(std::time::Duration::from_secs(5), handle_oauth_connection(stream)).await {
+                Ok(Ok(OAuthCallback::Code(code))) => return Ok(code),
+                Ok(Ok(OAuthCallback::Denied)) => return Err("Google sign-in was cancelled or denied. Please try again.".into()),
+                Ok(Ok(OAuthCallback::Ignore)) => continue,
+                Ok(Err(error)) => { report_error("Read Google callback", error); },
+                Err(_) => { report_error("Read Google callback", "Connection timed out"); },
+            }
+        }
+    }).await.map_err(|_| "Google sign-in timed out. Please try again.".to_string())?
+}
+
+async fn get_calendar_access_token(app: &tauri::AppHandle) -> Result<String, String> {
+    let _auth_guard = AUTH_LOCK.try_lock()
+        .map_err(|_| "Google Calendar authentication is already in progress.".to_string())?;
     dotenv().ok();
     let client_id = std::env::var("GOOGL_CLIENT_ID").map_err(|_| "Missing GOOGL_CLIENT_ID")?;
     let client_secret = std::env::var("GOOGL_CLIENT_SECRET").map_err(|_| "Missing GOOGL_CLIENT_SECRET")?;
-    let client = Client::new();
+    let client = Client::builder().timeout(std::time::Duration::from_secs(30))
+        .build().map_err(|e| e.to_string())?;
 
     if let Some(refresh_token) = load_refresh_token() {
         let params = [
@@ -100,10 +239,14 @@ async fn get_calendar_access_token() -> Result<String, String> {
             ("grant_type", "refresh_token"),
         ];
 
-        let res = client.post("https://oauth2.googleapis.com/token").form(&params).send().await.map_err(|e| e.to_string())?;
-        if res.status().is_success() {
-            let tokens: TokenResponse = res.json().await.map_err(|e| e.to_string())?;
-            return Ok(tokens.access_token);
+        let res = client.post("https://oauth2.googleapis.com/token").form(&params).send().await
+            .map_err(|e| report_error("Google token refresh request", e.without_url()))?;
+        match read_google_response::<TokenResponse>(res, "Google token refresh response").await {
+            Ok(tokens) => return Ok(tokens.access_token),
+            // Reauthenticate only for a rejected refresh token. Server outages,
+            // quota failures, and client configuration errors must not open login.
+            Err(error) if error.code.as_deref() == Some("invalid_grant") => {},
+            Err(error) => return Err(error.message),
         }
     }
 
@@ -114,27 +257,14 @@ async fn get_calendar_access_token() -> Result<String, String> {
         client_id, redirect_uri, GOOGLE_SCOPES
     );
 
-    let _ = Command::new("rundll32").args(["url.dll,FileProtocolHandler", &auth_url]).spawn();
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", REDIRECT_PORT)).map_err(|e| e.to_string())?;
-    let mut auth_code = String::new();
-
-    if let Ok((mut stream, _)) = listener.accept() {
-        let mut buffer = [0; 2048];
-        let bytes_read = stream.read(&mut buffer).map_err(|e| e.to_string())?;
-        let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-
-        if let Some(code_part) = request.split("code=").nth(1) {
-            if let Some(code) = code_part.split('&').next().and_then(|s| s.split_whitespace().next()) {
-                auth_code = code.to_string();
-            }
-        }
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h2>Login successful! You can close this window.</h2>";
-        let _ = stream.write_all(response.as_bytes());
+    let listener = TcpListener::bind(("127.0.0.1", REDIRECT_PORT)).await
+        .map_err(|e| format!("Could not start Google sign-in callback: {e}"))?;
+    Command::new("rundll32").args(["url.dll,FileProtocolHandler", &auth_url]).spawn()
+        .map_err(|e| format!("Could not open Google sign-in: {e}"))?;
+    if let Err(error) = app.emit("calendar-auth-waiting", ()) {
+        report_error("Notify calendar sign-in status", error);
     }
-
-    if auth_code.is_empty() {
-        return Err("Failed to capture authorization code.".into());
-    }
+    let auth_code = receive_oauth_callback(listener, AUTH_CALLBACK_TIMEOUT).await?;
 
     let params = [
         ("code", auth_code.as_str()),
@@ -144,7 +274,10 @@ async fn get_calendar_access_token() -> Result<String, String> {
         ("grant_type", "authorization_code"),
     ];
 
-    let token_res: TokenResponse = client.post("https://oauth2.googleapis.com/token").form(&params).send().await.map_err(|e| e.to_string())?.json().await.map_err(|e| e.to_string())?;
+    let response = client.post("https://oauth2.googleapis.com/token").form(&params).send().await
+        .map_err(|e| report_error("Google authorization exchange request", e.without_url()))?;
+    let token_res: TokenResponse = read_google_response(response, "Google authorization exchange response")
+        .await.map_err(|error| error.message)?;
     
     if let Some(ref_token) = token_res.refresh_token {
         save_refresh_token(&ref_token);
@@ -156,9 +289,11 @@ async fn get_calendar_access_token() -> Result<String, String> {
 // --- CALENDAR API LOGIC ---
 
 #[tauri::command]
-pub async fn fetch_todays_events() -> Result<Vec<AgendaEvent>, String> {
-    let access_token = get_calendar_access_token().await?;
-    let client = Client::new();
+pub async fn fetch_todays_events(app: tauri::AppHandle) -> Result<Vec<AgendaEvent>, String> {
+    let access_token = get_calendar_access_token(&app).await
+        .map_err(|error| report_error("Calendar authentication", error))?;
+    let client = Client::builder().timeout(std::time::Duration::from_secs(30))
+        .build().map_err(|e| report_error("Calendar HTTP client", e.without_url()))?;
 
     // Calculate strict time boundaries for the current day
     let now = Local::now();
@@ -175,20 +310,34 @@ pub async fn fetch_todays_events() -> Result<Vec<AgendaEvent>, String> {
         urlencoding::encode(&time_max)
     );
 
-    let response: CalendarResponse = client
-        .get(&api_url)
-        .bearer_auth(access_token)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut events = Vec::new();
+    let mut page_token: Option<String> = None;
+
+    loop {
+        // Keep the same time window and ordering for every page.
+        let mut request = client.get(&api_url).bearer_auth(&access_token);
+        if let Some(token) = &page_token {
+            request = request.query(&[("pageToken", token)]);
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| report_error("Google calendar events request", e.without_url()))?;
+        let response: CalendarResponse = read_google_response(response, "Google calendar events response")
+            .await.map_err(|error| error.message)?;
+
+        events.extend(response.items);
+        page_token = response.next_page_token.filter(|token| !token.is_empty());
+        if page_token.is_none() {
+            break;
+        }
+    }
 
     let mut agenda = Vec::new();
     let warning_threshold = now.with_timezone(&Utc) + Duration::minutes(10);
 
-    for item in response.items {
+    for item in events {
         let title = item.summary.unwrap_or_else(|| "Busy".to_string());
         
         let mut starts_in_ten = false;
@@ -248,4 +397,79 @@ pub async fn fetch_todays_events() -> Result<Vec<AgendaEvent>, String> {
     }
 
     Ok(agenda)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration as StdDuration;
+
+    fn run_test(future: impl std::future::Future<Output = ()>) {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all().build().unwrap().block_on(future);
+    }
+
+    #[test]
+    fn callback_timeout_releases_port_without_a_connection() {
+        run_test(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let error = receive_oauth_callback(listener, StdDuration::from_millis(50)).await.unwrap_err();
+            assert!(error.contains("timed out"));
+            let _replacement = TcpListener::bind(address).await.unwrap();
+        });
+    }
+
+    #[test]
+    fn callback_deadline_covers_a_connected_but_silent_browser() {
+        run_test(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let mut browser = TcpStream::connect(address).await.unwrap();
+            let error = receive_oauth_callback(listener, StdDuration::from_millis(50)).await.unwrap_err();
+            assert!(error.contains("timed out"));
+            let mut byte = [0];
+            assert_eq!(browser.read(&mut byte).await.unwrap(), 0);
+            let _replacement = TcpListener::bind(address).await.unwrap();
+        });
+    }
+
+    #[test]
+    fn callback_ignores_unrelated_requests_and_decodes_fragmented_code() {
+        run_test(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let browser = tokio::spawn(async move {
+                let mut unrelated = TcpStream::connect(address).await.unwrap();
+                unrelated.write_all(b"GET /favicon.ico HTTP/1.1\r\nHost: localhost\r\n\r\n").await.unwrap();
+                let mut response = Vec::new();
+                unrelated.read_to_end(&mut response).await.unwrap();
+                assert!(response.starts_with(b"HTTP/1.1 404"));
+
+                let mut callback = TcpStream::connect(address).await.unwrap();
+                callback.write_all(b"GET /?code=test%2B").await.unwrap();
+                tokio::time::sleep(StdDuration::from_millis(10)).await;
+                callback.write_all(b"code%2Fvalue&scope=calendar HTTP/1.1\r\nHost: localhost\r\n\r\n").await.unwrap();
+                let mut response = Vec::new();
+                callback.read_to_end(&mut response).await.unwrap();
+                assert!(response.starts_with(b"HTTP/1.1 200"));
+            });
+            let code = receive_oauth_callback(listener, StdDuration::from_secs(2)).await.unwrap();
+            assert_eq!(code, "test+code/value");
+            browser.await.unwrap();
+        });
+    }
+
+    #[test]
+    fn callback_denial_returns_an_error_and_releases_port() {
+        run_test(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let mut browser = TcpStream::connect(address).await.unwrap();
+            browser.write_all(b"GET /?error=access_denied HTTP/1.1\r\nHost: localhost\r\n\r\n").await.unwrap();
+            let error = receive_oauth_callback(listener, StdDuration::from_secs(2)).await.unwrap_err();
+            assert!(error.contains("cancelled or denied"));
+            let _replacement = TcpListener::bind(address).await.unwrap();
+        });
+    }
 }

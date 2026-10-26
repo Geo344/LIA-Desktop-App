@@ -1,6 +1,7 @@
 use serde::Serialize;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use std::sync::Mutex;
+use crate::diagnostics::report_error;
 
 #[cfg(target_os = "windows")]
 use windows::Media::Control::{
@@ -19,6 +20,46 @@ use windows::{
 
 // Global cache to store the last known media state
 static LAST_MEDIA_STATE: Mutex<Option<MediaState>> = Mutex::new(None);
+
+#[cfg(target_os = "windows")]
+fn current_session() -> Result<Option<windows::Media::Control::GlobalSystemMediaTransportControlsSession>, String> {
+    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .and_then(|op| op.get())
+        .map_err(|error| report_error("Request Windows media manager", error))?;
+    match manager.GetCurrentSession() {
+        Ok(session) => Ok(Some(session)),
+        // A null WinRT interface means there is no current session.
+        Err(error) if error.code().0 == 0x80004003u32 as i32 => Ok(None),
+        Err(error) => Err(report_error("Get current Windows media session", error)),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn read_thumbnail(props: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties) -> Result<Option<String>, String> {
+    let thumbnail = match props.Thumbnail() {
+        Ok(thumbnail) => thumbnail,
+        Err(error) if error.code().0 == 0x80004003u32 as i32 => return Ok(None),
+        Err(error) => return Err(report_error("Get media thumbnail", error)),
+    };
+    let stream = thumbnail.OpenReadAsync().and_then(|op| op.get())
+        .map_err(|error| report_error("Open media thumbnail", error))?;
+    let size = stream.Size().map_err(|error| report_error("Get media thumbnail size", error))?;
+    if size == 0 { return Ok(None); }
+    // Bound allocation and avoid truncating the length passed to WinRT.
+    if size > 16 * 1024 * 1024 {
+        return Err(report_error("Read media thumbnail", "Artwork exceeds 16 MiB"));
+    }
+    let reader = DataReader::CreateDataReader(&stream)
+        .map_err(|error| report_error("Create thumbnail reader", error))?;
+    let loaded = reader.LoadAsync(size as u32).and_then(|op| op.get())
+        .map_err(|error| report_error("Load media thumbnail", error))?;
+    if loaded != size as u32 {
+        return Err(report_error("Load media thumbnail", "Incomplete artwork data"));
+    }
+    let mut buffer = vec![0u8; size as usize];
+    reader.ReadBytes(&mut buffer).map_err(|error| report_error("Read media thumbnail", error))?;
+    Ok(Some(STANDARD.encode(buffer)))
+}
 
 #[derive(Serialize, Clone)]
 pub struct MediaState {
@@ -53,54 +94,21 @@ pub async fn get_media_state() -> Result<MediaState, String> {
     {
         let empty_state = MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, thumbnail_base64: None };
 
-        let manager_res = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get());
-        
         let mut current_state: Option<MediaState> = None;
-
-        if let Ok(manager) = manager_res {
-            if let Ok(session) = manager.GetCurrentSession() {
-                if let Ok(props) = session.TryGetMediaPropertiesAsync().and_then(|op| op.get()) {
-                    let title = props.Title().map(|s| s.to_string()).unwrap_or_default();
-                    let artist = props.Artist().map(|s| s.to_string()).unwrap_or_default();
-
-                    let is_playing = session.GetPlaybackInfo()
-                        .and_then(|info| info.PlaybackStatus())
-                        .map(|status| status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
-                        .unwrap_or(false);
-
-                    let mut thumbnail_base64 = None;
-                    if let Ok(thumbnail_ref) = props.Thumbnail() {
-                        if let Ok(stream_op) = thumbnail_ref.OpenReadAsync() {
-                            if let Ok(stream) = stream_op.get() {
-                                if let Ok(size) = stream.Size() {
-                                    if size > 0 {
-                                        if let Ok(reader) = DataReader::CreateDataReader(&stream) {
-                                            if let Ok(load_op) = reader.LoadAsync(size as u32) {
-                                                if let Ok(_) = load_op.get() {
-                                                    let mut buffer = vec![0u8; size as usize];
-                                                    if let Ok(_) = reader.ReadBytes(&mut buffer) {
-                                                        thumbnail_base64 = Some(STANDARD.encode(&buffer));
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Only capture valid sessions with a title to avoid empty ghost states
-                    if !title.is_empty() {
-                        current_state = Some(MediaState {
-                            is_active: true,
-                            title,
-                            artist,
-                            is_playing,
-                            thumbnail_base64,
-                        });
-                    }
-                }
+        if let Some(session) = current_session()? {
+            let props = session.TryGetMediaPropertiesAsync().and_then(|op| op.get())
+                .map_err(|error| report_error("Get Windows media properties", error))?;
+            let title = props.Title().map_err(|error| report_error("Get media title", error))?.to_string();
+            let artist = props.Artist().map_err(|error| report_error("Get media artist", error))?.to_string();
+            let is_playing = session.GetPlaybackInfo().and_then(|info| info.PlaybackStatus())
+                .map_err(|error| report_error("Get media playback status", error))?
+                == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+            // Artwork is optional: log failures but preserve usable playback data.
+            let thumbnail_base64 = read_thumbnail(&props).unwrap_or(None);
+            if !title.is_empty() {
+                current_state = Some(MediaState {
+                    is_active: true, title, artist, is_playing, thumbnail_base64,
+                });
             }
         }
 
@@ -110,7 +118,9 @@ pub async fn get_media_state() -> Result<MediaState, String> {
             let _ = EnumWindows(Some(check_ytm_window_proc), LPARAM(&mut is_ytm_open as *mut _ as isize));
         }
 
-        if let Ok(mut cache) = LAST_MEDIA_STATE.lock() {
+        {
+            let mut cache = LAST_MEDIA_STATE.lock()
+                .map_err(|_| report_error("Lock media cache", "Cache mutex is poisoned"))?;
             if let Some(state) = current_state {
                 // SMTC found a valid playing session. Update the cache and return it.
                 *cache = Some(state.clone());
@@ -138,54 +148,46 @@ pub async fn get_media_state() -> Result<MediaState, String> {
             }
         }
 
-        Ok(empty_state)
     }
 
     #[cfg(not(target_os = "windows"))]
     Ok(MediaState { is_active: false, title: "".into(), artist: "".into(), is_playing: false, thumbnail_base64: None })
 }
 
+#[cfg(target_os = "windows")]
+fn control_media(action: &'static str) -> Result<(), String> {
+    let session = current_session()?.ok_or_else(|| report_error(action, "No active media session"))?;
+    let result = match action {
+        "Play/pause media" => session.TryTogglePlayPauseAsync(),
+        "Skip to next media" => session.TrySkipNextAsync(),
+        _ => session.TrySkipPreviousAsync(),
+    }.and_then(|op| op.get()).map_err(|error| report_error(action, error))?;
+    if !result {
+        return Err(report_error(action, "Media application rejected the playback command"));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn media_play_pause() -> Result<(), String> {
     #[cfg(target_os = "windows")]
-    if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
-        if let Ok(manager) = op.get() { 
-            if let Ok(session) = manager.GetCurrentSession() {
-                if let Ok(op2) = session.TryTogglePlayPauseAsync() {
-                    let _ = op2.get(); 
-                }
-            }
-        }
-    }
+    { return control_media("Play/pause media"); }
+    #[cfg(not(target_os = "windows"))]
     Ok(())
 }
 
 #[tauri::command]
 pub async fn media_next() -> Result<(), String> {
     #[cfg(target_os = "windows")]
-    if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
-        if let Ok(manager) = op.get() { 
-            if let Ok(session) = manager.GetCurrentSession() {
-                if let Ok(op2) = session.TrySkipNextAsync() {
-                    let _ = op2.get(); 
-                }
-            }
-        }
-    }
+    { return control_media("Skip to next media"); }
+    #[cfg(not(target_os = "windows"))]
     Ok(())
 }
 
 #[tauri::command]
 pub async fn media_prev() -> Result<(), String> {
     #[cfg(target_os = "windows")]
-    if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
-        if let Ok(manager) = op.get() { 
-            if let Ok(session) = manager.GetCurrentSession() {
-                if let Ok(op2) = session.TrySkipPreviousAsync() {
-                    let _ = op2.get(); 
-                }
-            }
-        }
-    }
+    { return control_media("Skip to previous media"); }
+    #[cfg(not(target_os = "windows"))]
     Ok(())
 }

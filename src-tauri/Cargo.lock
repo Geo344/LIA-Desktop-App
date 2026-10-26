@@ -16,6 +16,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "tokio",
  "urlencoding",
  "windows 0.58.0",
 ]

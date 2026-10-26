@@ -4,6 +4,7 @@ mod media;
 mod wallpaper;
 mod calendar;
 mod notes;
+mod diagnostics;
 
 use tauri::Manager;
 use audio::{play_ping, AudioEngine};

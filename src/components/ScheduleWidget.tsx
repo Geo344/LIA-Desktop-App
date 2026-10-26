@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export interface AgendaEvent {
   title: string;
@@ -12,18 +13,59 @@ export interface AgendaEvent {
 
 export default function ScheduleWidget() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
-
-  const fetchEvents = () => {
-    invoke<AgendaEvent[]>("fetch_todays_events")
-      .then((data) => setEvents(data))
-      .catch((err) => console.error("Failed to fetch calendar agenda:", err));
-  };
+  const [status, setStatus] = useState("Loading schedule…");
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetchEvents();
-    const interval = setInterval(fetchEvents, 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+    let disposed = false;
+    let inFlight = false;
+    let failed = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    let unlisten: (() => void) | undefined;
+
+    const fetchEvents = async () => {
+      if (disposed || inFlight || failed) return;
+      inFlight = true;
+      setError(null);
+      setStatus("Loading schedule…");
+      try {
+        const data = await invoke<AgendaEvent[]>("fetch_todays_events");
+        if (!disposed) setEvents(data);
+      } catch (err) {
+        // Wait for an explicit retry instead of reopening sign-in every minute.
+        failed = true;
+        if (!disposed) setError(String(err));
+      } finally {
+        inFlight = false;
+        if (!disposed) setStatus("");
+      }
+    };
+
+    // Subscribe before invoking so a fast authentication event cannot be missed.
+    void listen("calendar-auth-waiting", () => {
+      if (!disposed && inFlight) setStatus("Waiting for Google sign-in…");
+    }).then((stopListening) => {
+      if (disposed) {
+        stopListening();
+        return;
+      }
+      unlisten = stopListening;
+      void fetchEvents();
+      interval = setInterval(() => void fetchEvents(), 60 * 1000);
+    }).catch((err) => {
+      if (!disposed) {
+        setStatus("");
+        setError(String(err));
+      }
+    });
+
+    return () => {
+      disposed = true;
+      if (interval !== undefined) clearInterval(interval);
+      unlisten?.();
+    };
+  }, [attempt]);
 
   return (
     <div className="schedule-widget">
@@ -32,7 +74,17 @@ export default function ScheduleWidget() {
       </div>
 
       <div className="schedule-events-list">
-        {events.length === 0 ? (
+        {(status || error) && (
+          <div className="schedule-status" role="status" aria-live="polite">
+            <span>{error || status}</span>
+            {error && <button className="schedule-retry" onClick={() => {
+              setError(null);
+              setStatus("Loading schedule…");
+              setAttempt((value) => value + 1);
+            }}>Retry</button>}
+          </div>
+        )}
+        {events.length === 0 && !status && !error ? (
           <div className="schedule-empty">No remaining events today</div>
         ) : (
           events.map((event, idx) => (
