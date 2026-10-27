@@ -22,25 +22,32 @@ use windows::{
 static LAST_MEDIA_STATE: Mutex<Option<MediaState>> = Mutex::new(None);
 
 #[cfg(target_os = "windows")]
-fn current_session() -> Result<Option<windows::Media::Control::GlobalSystemMediaTransportControlsSession>, String> {
-    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-        .and_then(|op| op.get())
-        .map_err(|error| report_error("Request Windows media manager", error))?;
-    match manager.GetCurrentSession() {
-        Ok(session) => Ok(Some(session)),
-        // A null WinRT interface means there is no current session.
-        Err(error) if error.code().0 == 0x80004003u32 as i32 => Ok(None),
-        Err(error) => Err(report_error("Get current Windows media session", error)),
+fn optional_winrt_interface<T>(
+    result: windows::core::Result<T>,
+    context: &'static str,
+) -> Result<Option<T>, String> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        // windows-core 0.58 maps a successful call returning a null interface to
+        // Error::empty() (S_OK), rather than a Rust Option. A missing session or
+        // thumbnail is normal; preserve genuine failures from the underlying API.
+        Err(error) if error.code() == windows::Win32::Foundation::S_OK
+            || error.code() == windows::Win32::Foundation::E_POINTER => Ok(None),
+        Err(error) => Err(report_error(context, error)),
     }
 }
 
 #[cfg(target_os = "windows")]
+fn current_session() -> Result<Option<windows::Media::Control::GlobalSystemMediaTransportControlsSession>, String> {
+    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .and_then(|op| op.get())
+        .map_err(|error| report_error("Request Windows media manager", error))?;
+    optional_winrt_interface(manager.GetCurrentSession(), "Get current Windows media session")
+}
+
+#[cfg(target_os = "windows")]
 fn read_thumbnail(props: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties) -> Result<Option<String>, String> {
-    let thumbnail = match props.Thumbnail() {
-        Ok(thumbnail) => thumbnail,
-        Err(error) if error.code().0 == 0x80004003u32 as i32 => return Ok(None),
-        Err(error) => return Err(report_error("Get media thumbnail", error)),
-    };
+    let Some(thumbnail) = optional_winrt_interface(props.Thumbnail(), "Get media thumbnail")? else { return Ok(None); };
     let stream = thumbnail.OpenReadAsync().and_then(|op| op.get())
         .map_err(|error| report_error("Open media thumbnail", error))?;
     let size = stream.Size().map_err(|error| report_error("Get media thumbnail size", error))?;
@@ -193,4 +200,41 @@ pub async fn media_prev() -> Result<(), String> {
     { return control_media("Skip to previous media"); }
     #[cfg(not(target_os = "windows"))]
     Ok(())
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+    use windows::core::{Error, HRESULT};
+
+    #[test]
+    fn optional_interfaces_accept_windows_null_results_without_an_error() {
+        let missing_session: windows::core::Result<windows::Media::Control::GlobalSystemMediaTransportControlsSession> =
+            unsafe { windows::core::Type::from_abi(std::ptr::null_mut()) };
+        assert!(optional_winrt_interface(missing_session, "Test WinRT null projection").unwrap().is_none());
+        assert_eq!(
+            optional_winrt_interface(Ok(42), "Test present media").unwrap(),
+            Some(42)
+        );
+        assert!(
+            optional_winrt_interface::<()>(Err(Error::empty()), "Test absent media")
+                .unwrap()
+                .is_none()
+        );
+        assert!(optional_winrt_interface::<()>(
+            Err(Error::from_hresult(HRESULT(0x80004003u32 as i32))),
+            "Test null media"
+        )
+        .unwrap()
+        .is_none());
+    }
+
+    #[test]
+    fn optional_interfaces_preserve_real_windows_failures() {
+        let result = optional_winrt_interface::<()>(
+            Err(Error::from_hresult(HRESULT(0x80070005u32 as i32))),
+            "Test denied media",
+        );
+        assert!(result.unwrap_err().contains("Test denied media"));
+    }
 }
