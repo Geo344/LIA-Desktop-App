@@ -74,15 +74,8 @@ export default function App() {
       .catch(console.error);
   }, []);
 
-  const handleClick = (name: string, path: string) => {
-    const targetPath =
-      name.toLowerCase() === "recycle bin" || name.toLowerCase() === "trash"
-        ? "shell:RecycleBinFolder"
-        : path;
-    
-    if (targetPath) {
-      invoke("launch_item", { path: targetPath }).catch(console.error);
-    }
+  const handleClick = (name: string) => {
+    invoke("launch_item", { name }).catch(console.error);
   };
 
   const fullTimeString = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -117,7 +110,8 @@ export default function App() {
               key={config.matchName}
               className="custom-shortcut"
               onPointerDown={() => invoke("play_ping", { soundType: "shortcut" }).catch(console.error)}
-              onClick={() => handleClick(config.matchName, item?.path || "")}
+              onClick={() => handleClick(config.matchName)}
+              disabled={config.matchName !== "Recycle Bin" && !item?.path}
               title={config.matchName}
             >
               <div className="icon-container">

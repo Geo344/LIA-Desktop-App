@@ -1,4 +1,9 @@
 .env
+.env.*
+!.env.example
+tokens.json
+tokens.dpapi
+tokens.dpapi.tmp
 
 # Logs
 logs

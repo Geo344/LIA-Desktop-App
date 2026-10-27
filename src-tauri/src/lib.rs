@@ -5,6 +5,7 @@ mod wallpaper;
 mod calendar;
 mod notes;
 mod diagnostics;
+mod token_store;
 
 use tauri::Manager;
 use audio::{play_ping, AudioEngine};
@@ -20,7 +21,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(audio_engine)
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             if let Some(main_window) = app.get_webview_window("main") {
                 #[cfg(target_os = "windows")]
